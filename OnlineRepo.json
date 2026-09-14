@@ -1,5 +1,193 @@
 [
   {
+    "Name": "无敌提示宏",
+    "Guid": "FCDCA220-DA96-48B5-909B-C1E336671D54",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/01-General/InvulnAlert.cs",
+    "Note": "自身无敌倒计时提示。",
+    "UpdateTime": "2026-09-14T14:32:43Z"
+  },
+  {
+    "Name": "泰坦歼灭战",
+    "Guid": "BC3B91DA-224A-4356-B7B3-75A8366A2C1C",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/02-ARealmReborn/TheNavel.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1046,
+      293
+    ]
+  },
+  {
+    "Name": "O10n",
+    "Guid": "9248BFE3-D4AE-46AA-9111-AEC2DACDE893",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/04-Stormblood/O10n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      799
+    ]
+  },
+  {
+    "Name": "亚历山大绝境战",
+    "Guid": "E047803D-38D5-45B4-AF48-71C0691CDCC9",
+    "Version": "0.0.2.9",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/05-Shadowbringers/TheEpicOfAlexander.cs",
+    "Note": "有问题来DC反馈。\n画图基于设置的小队职能进行绘制，请确保设置准确无误。\n/e KASCLEAR 清理残余画图",
+    "UpdateInfo": "有问题来DC反馈。\n更新水雷指路，默认三雷ST",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      887
+    ]
+  },
+  {
+    "Name": "巴尔巴莉希娅歼灭战",
+    "Guid": "776A7DFB-F8C3-4ECC-BFB7-3631D083A117",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/StormsCrown.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1071
+    ]
+  },
+  {
+    "Name": "间歇灵泉哈姆岛",
+    "Guid": "554C2F0D-3E58-14B1-237A-2CA662AC229E",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheAetherfont.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1126
+    ]
+  },
+  {
+    "Name": "终结之战",
+    "Guid": "2BEBDA4A-DA6A-4B54-B9B8-533F34B3A2EB",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheFinalDay.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      997
+    ]
+  },
+  {
+    "Name": "阿修罗歼灭战",
+    "Guid": "0F38EA83-3D3A-AF4E-8908-56655F76014E",
+    "Version": "0.0.0.1",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheGildedAraya.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1136
+    ]
+  },
+  {
+    "Name": "海德林歼灭战",
+    "Guid": "EB83FE40-4DDC-42C8-B248-CBFDF9D0E2C1",
+    "Version": "0.0.0.1",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheMothercrystal.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      995
+    ]
+  },
+  {
+    "Name": "忆中金曦亚历山德里亚",
+    "Guid": "243443E4-FC8E-3EA6-9A75-FD2A4B6990FF",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/Alexandria.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1199
+    ]
+  },
+  {
+    "Name": "M1n",
+    "Guid": "28EEE8DC-DA6A-3F91-0D0C-7AA1BFB49AB0",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M1n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1225
+    ]
+  },
+  {
+    "Name": "M2n",
+    "Guid": "4FD21978-B76C-4BF7-A3F5-D0490BB51915",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M2n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1227
+    ]
+  },
+  {
+    "Name": "M3n",
+    "Guid": "AA6A8D8A-4462-41A2-B500-90515DE6534A",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M3n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1229
+    ]
+  },
+  {
+    "Name": "M4n",
+    "Guid": "F4A95B34-AE13-40E4-9106-78D607BCFD57",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M4n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1231
+    ]
+  },
+  {
+    "Name": "荒野秘境仙人刺谷",
+    "Guid": "C6AAF3DF-64BA-15C2-41F8-D24F7F4656DD",
+    "Version": "0.0.0.5",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/TenderValley.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1203
+    ]
+  },
+  {
+    "Name": "噩梦乐园迷途鬼区",
+    "Guid": "32BC9D47-D623-507F-CDBF-E17EFEA73FA4",
+    "Version": "0.0.0.8",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/TheStrayboroughDeadwalk.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1204
+    ]
+  },
+  {
+    "Name": "艳翼蛇鸟歼灭战",
+    "Guid": "E9ABB865-498F-4C4F-8071-8A2E9F0589F6",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/WorqorLarDor.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1195
+    ]
+  },
+  {
     "Name": "M1s绘图",
     "Guid": "8010d865-7d6d-4c23-92e0-f4b0120e18ac",
     "Version": "0.0.0.9",

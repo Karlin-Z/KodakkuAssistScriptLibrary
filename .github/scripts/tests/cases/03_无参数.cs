@@ -1,0 +1,2 @@
+[ScriptType]
+class A {}

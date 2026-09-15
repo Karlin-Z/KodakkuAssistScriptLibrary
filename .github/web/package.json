@@ -1,0 +1,25 @@
+{
+  "name": "kodakku-assist-script-library-web",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "KodakkuAssistScriptLibrary 在线脚本索引的展示页面",
+  "scripts": {
+    "sync-index": "node scripts/sync-index.mjs",
+    "predev": "npm run sync-index",
+    "dev": "vite",
+    "prebuild": "npm run sync-index",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "vue": "^3.5.42"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.9",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.0",
+    "vue-tsc": "^3.3.11"
+  }
+}

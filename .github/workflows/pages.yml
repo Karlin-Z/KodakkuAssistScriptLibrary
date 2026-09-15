@@ -1,8 +1,8 @@
 name: Build and Deploy Pages
 
 # 访问地址：https://karlin-z.github.io/KodakkuAssistScriptLibrary/
-#   - /index.json             合并后的索引，填进 KodakkuAssist 的 OnlineRepo
-#   - /                     说明页（贡献者、脚本数、冲突提示）
+#   - /           展示页（.github/web 里的 Vue 应用，浏览 / 搜索 / 筛选全部脚本）
+#   - /index.json 合并后的索引，插件与外部订阅方读取的机器可读接口
 # 另外仓库根目录会生成一份同样的 OnlineRepo.json，可用 raw 直链订阅。
 #
 # 触发方式有两个，缺一不可：
@@ -38,12 +38,31 @@ jobs:
       - name: 配置 Pages
         uses: actions/configure-pages@v6
 
+      # 审核 / 生成索引 / 前端构建现在都跑在 Node 上（前两者零依赖，不需要 npm install）
+      - name: 配置 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: .github/web/package-lock.json
+
       # 审核/合并脚本自身的规则自测，改坏了会在这里立刻失败，避免发布错误索引
       - name: 运行内置自测
-        run: python3 .github/scripts/tests/selftest.py
+        run: node .github/scripts/tests/selftest.mjs
 
-      - name: 扫描 .cs 并生成合并索引
-        run: python3 .github/scripts/merge_repos.py --out _site
+      - name: 安装前端依赖
+        working-directory: .github/web
+        run: npm ci
+
+      # 产物直接写进 _site，与下面的 merge_repos 共用同一个站点目录
+      - name: 构建展示页
+        working-directory: .github/web
+        run: npm run build
+
+      # 顺序不能反：vite 会清空 _site，先跑这一步 index.json 会被删掉。
+      # --no-html：index.html 已经由前端产出，这里只补机器可读的索引。
+      - name: 生成合并索引
+        run: node .github/scripts/merge_repos.mjs --out _site --no-html
 
       - name: 上传站点内容
         uses: actions/upload-pages-artifact@v5
@@ -73,9 +92,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: 配置 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - name: 生成根目录索引与 guid 映射表
         run: |
-          python3 .github/scripts/merge_repos.py \
+          node .github/scripts/merge_repos.mjs \
             --root-json OnlineRepo.json \
             --guid-map .github/index/guid-map.json \
             --no-site

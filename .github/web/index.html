@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="FF14 卫月可达鸭插件的官方在线脚本库索引：按贡献者浏览、搜索与筛选全部脚本。"
+    />
+    <title>KodakkuAssistScriptLibrary 脚本索引</title>
+    <script>
+      // 在首屏绘制前套用已保存的主题，否则选了深色的用户每次刷新都会先闪一下白屏。
+      // 与应用里 useTheme 共用同一个存储键，键名改动时两边都要改。
+      try {
+        var saved = localStorage.getItem('kasl-theme')
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved)
+        }
+      } catch (error) {
+        /* 隐私模式下 localStorage 不可用，忽略即可，跟随系统显示 */
+      }
+    </script>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

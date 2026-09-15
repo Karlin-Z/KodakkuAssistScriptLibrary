@@ -1,0 +1,557 @@
+{
+  "01_注释里的假特性.cs": {
+    "params": {
+      "name": [
+        "string",
+        "真"
+      ],
+      "guid": [
+        "string",
+        "g1"
+      ]
+    },
+    "errors": []
+  },
+  "02_两处特性.cs": {
+    "params": {},
+    "errors": [
+      "找到 2 处 [ScriptType(...)]，要求每个 .cs 文件只能有一处"
+    ]
+  },
+  "03_无参数.cs": {
+    "params": {},
+    "errors": [
+      "[ScriptType] 缺少参数列表"
+    ]
+  },
+  "04_括号不匹配.cs": {
+    "params": {},
+    "errors": [
+      "特性的括号不匹配"
+    ]
+  },
+  "05_位置参数.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "name": [
+        "string",
+        "名字"
+      ],
+      "territorys": [
+        "array",
+        [
+          1226
+        ]
+      ],
+      "version": [
+        "string",
+        "0.0.1"
+      ],
+      "author": [
+        "string",
+        "作者"
+      ]
+    },
+    "errors": []
+  },
+  "06_过多位置参数.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "a"
+      ],
+      "name": [
+        "string",
+        "b"
+      ],
+      "territorys": [
+        "array",
+        [
+          1
+        ]
+      ],
+      "version": [
+        "string",
+        "c"
+      ],
+      "author": [
+        "string",
+        "d"
+      ],
+      "note": [
+        "string",
+        "e"
+      ],
+      "updateInfo": [
+        "string",
+        "f"
+      ]
+    },
+    "errors": [
+      "位置参数过多（最多 7 个）"
+    ]
+  },
+  "07_重复参数.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": [
+      "参数 guid 被重复指定"
+    ]
+  },
+  "08_字符串含分隔符.cs": {
+    "params": {
+      "name": [
+        "string",
+        "a,b)c]d:e[f"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "09_插值引用const.cs": {
+    "params": {
+      "name": [
+        "string",
+        "v1.2.3"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "10_双美元原始插值.cs": {
+    "params": {
+      "name": [
+        "string",
+        "值 内层 与字面 {brace}"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "11_逐字字符串.cs": {
+    "params": {
+      "name": [
+        "string",
+        "第一\"第二"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "12_转义序列.cs": {
+    "params": {
+      "name": [
+        "string",
+        "tab\thereAB\n尾"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "13_十六进制与负数.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "array",
+        [
+          16,
+          -1,
+          1226
+        ]
+      ]
+    },
+    "errors": []
+  },
+  "14_数组写法.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "array",
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    "errors": []
+  },
+  "15_隐式数组.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "array",
+        [
+          3,
+          4
+        ]
+      ]
+    },
+    "errors": []
+  },
+  "16_ArrayEmpty.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "array",
+        []
+      ]
+    },
+    "errors": []
+  },
+  "17_const链.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "尾部"
+      ]
+    },
+    "errors": []
+  },
+  "18_字符串拼接.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "第一第二"
+      ]
+    },
+    "errors": []
+  },
+  "19_前缀假特性.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "20_命名空间前缀.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "21_命名空间Attribute.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "22_位置参数含双冒号.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "name": [
+        "string",
+        "a::b"
+      ],
+      "author": [
+        "string",
+        "B::C"
+      ]
+    },
+    "errors": []
+  },
+  "23_未知具名参数.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": [
+      "无法识别的具名参数 'foo'；可用参数：guid, name, territorys, version, author, note, updateInfo"
+    ]
+  },
+  "24_数字下划线.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "unknown",
+        "[1_000]"
+      ]
+    },
+    "errors": []
+  },
+  "25_反序前缀.cs": {
+    "params": {
+      "name": [
+        "string",
+        "前缀9"
+      ],
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "26_空文件.cs": {
+    "params": {},
+    "errors": [
+      "文件内容为空"
+    ]
+  },
+  "27_只有注释.cs": {
+    "params": {},
+    "errors": [
+      "文件内容为空"
+    ]
+  },
+  "28_字符串含未闭合引号.cs": {
+    "params": {},
+    "errors": [
+      "特性的括号不匹配"
+    ]
+  },
+  "29_const类型不匹配.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "int",
+        5
+      ]
+    },
+    "errors": []
+  },
+  "30_环引用.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "identifier",
+        "A"
+      ]
+    },
+    "errors": []
+  },
+  "31_解析不了的插值原样保留.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "版本{semver.Major}发布"
+      ]
+    },
+    "errors": []
+  },
+  "32_原始字符串含引号.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "他说\"你好\"就走了"
+      ]
+    },
+    "errors": []
+  },
+  "33_原始字符串插值.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "版本 2.0 发布"
+      ]
+    },
+    "errors": []
+  },
+  "34_特性跨多行.cs": {
+    "params": {
+      "name": [
+        "string",
+        "跨行"
+      ],
+      "territorys": [
+        "array",
+        [
+          1,
+          2
+        ]
+      ],
+      "guid": [
+        "string",
+        "g"
+      ],
+      "author": [
+        "string",
+        "A"
+      ]
+    },
+    "errors": []
+  },
+  "35_字符字面量.cs": {
+    "params": {
+      "guid": [
+        "unknown",
+        "'g'"
+      ],
+      "name": [
+        "string",
+        "含'单引号"
+      ]
+    },
+    "errors": []
+  },
+  "36_数组夹杂空元素.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "array",
+        [
+          1,
+          2
+        ]
+      ]
+    },
+    "errors": []
+  },
+  "37_未知取值.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "territorys": [
+        "identifier",
+        "SomeArray"
+      ]
+    },
+    "errors": []
+  },
+  "38_块注释跨行含特性.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ]
+    },
+    "errors": []
+  },
+  "39_字符串里的注释符号.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "note": [
+        "string",
+        "http://x // 不是注释 /* 也不是 */"
+      ]
+    },
+    "errors": []
+  },
+  "40_无territorys.cs": {
+    "params": {
+      "guid": [
+        "string",
+        "g"
+      ],
+      "name": [
+        "string",
+        "只有必要参数"
+      ]
+    },
+    "errors": []
+  },
+  "41_双美元selftest.cs": {
+    "params": {
+      "name": [
+        "string",
+        "N"
+      ],
+      "guid": [
+        "string",
+        "8010d865-7d6d-4c23-92e0-f4b0120e18ac"
+      ],
+      "version": [
+        "string",
+        "0.0.0.9"
+      ],
+      "author": [
+        "string",
+        "A"
+      ],
+      "territorys": [
+        "array",
+        [
+          1226
+        ]
+      ],
+      "note": [
+        "string",
+        "v1.2.3 价格 {100}"
+      ]
+    },
+    "errors": []
+  }
+}

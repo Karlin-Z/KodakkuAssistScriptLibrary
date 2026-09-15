@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 _site/
+node_modules/
+# 前端所需的 index.json 由 sync-index 从根目录 OnlineRepo.json 复制而来
+.github/web/public/index.json

@@ -862,5 +862,19 @@
       825,
       1302
     ]
+  },
+  {
+    "Name": "SimpleScript",
+    "Guid": "d3b6a9b4-1e0e-4e0c-b7b7-ff1fce0e6cf1",
+    "Version": "0.0.0.2",
+    "Author": "yoyokity",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/yoyokity/test.cs",
+    "Note": "这是一个提示文本.\n他有多行显示.\n请在这里放置你的提示文本",
+    "UpdateInfo": "这里是更新信息.\n他有多行显示.\n请在这里放置你的更新信息",
+    "UpdateTime": "2026-09-15T13:46:25Z",
+    "TerritoryIds": [
+      179,
+      979
+    ]
   }
 ]

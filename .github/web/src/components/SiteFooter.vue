@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { links, siteIndexPath } from '../links'
+import { links } from '../links'
 import { NAV, TOP_ID } from '../sections'
 
 const YEAR = new Date().getFullYear()

@@ -1,4 +1,4 @@
-/** 与 merge_repos.py 生成的 index.json 一一对应；值为空的字段在 JSON 里直接被省略。 */
+/** 与 merge_repos.mjs 生成的 index.json 一一对应；值为空的字段在 JSON 里直接被省略。 */
 export interface ScriptEntry {
   Name: string
   Guid: string

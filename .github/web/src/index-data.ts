@@ -1,7 +1,7 @@
 import { parseTime } from './format'
 import type { ScriptEntry, ScriptRow } from './types'
 
-/** 站点根目录的合并索引，由 merge_repos.py 生成。 */
+/** 站点根目录的合并索引，由 merge_repos.mjs 生成。 */
 const INDEX_URL = `${import.meta.env.BASE_URL}index.json`
 
 /**

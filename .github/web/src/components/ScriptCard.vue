@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import AppBadge from './AppBadge.vue'
+import AppButton from './AppButton.vue'
 import { formatDate, formatRelative } from '../format'
 import type { ScriptRow } from '../types'
 
@@ -55,13 +57,15 @@ async function download(): Promise<void> {
 </script>
 
 <template>
-  <article class="card">
-    <header class="card__head">
-      <h2 class="card__name">{{ row.Name }}</h2>
-      <span class="badge">v{{ row.Version }}</span>
+  <article
+    class="flex flex-col gap-2.5 rounded-xl border border-line-soft bg-surface px-5 py-4.5 shadow-sm transition hover:-translate-y-px hover:border-line hover:shadow-md"
+  >
+    <header class="flex flex-wrap items-baseline gap-2.5">
+      <h2 class="text-[17px] leading-[1.4] font-semibold wrap-anywhere">{{ row.Name }}</h2>
+      <AppBadge>v{{ row.Version }}</AppBadge>
     </header>
 
-    <p class="card__meta">
+    <p class="flex flex-wrap items-center gap-2 text-[13px] text-fg-muted">
       <span>{{ row.Author }}</span>
       <span aria-hidden="true">·</span>
       <span>{{ row.contributor }}</span>
@@ -69,143 +73,37 @@ async function download(): Promise<void> {
       <span :title="formatDate(row.updatedAt)">更新于 {{ formatRelative(row.updatedAt) }}</span>
     </p>
 
-    <p class="card__territories">
+    <p class="flex flex-wrap gap-1.5">
       <template v-if="territories.length">
-        <span v-for="id in shownTerritories" :key="id" class="badge">地图 {{ id }}</span>
-        <span v-if="hiddenTerritories" class="badge" :title="territories.join('、')">
+        <AppBadge v-for="id in shownTerritories" :key="id">地图 {{ id }}</AppBadge>
+        <AppBadge v-if="hiddenTerritories" :title="territories.join('、')">
           +{{ hiddenTerritories }}
-        </span>
+        </AppBadge>
       </template>
-      <span v-else class="badge">不限地图</span>
+      <AppBadge v-else>不限地图</AppBadge>
     </p>
 
-    <p v-if="row.Note" class="card__note">{{ row.Note }}</p>
+    <p v-if="row.Note" class="whitespace-pre-wrap text-fg wrap-anywhere">{{ row.Note }}</p>
 
-    <div v-if="row.UpdateInfo" class="card__update">
-      <span class="card__update-label">更新说明</span>
+    <div v-if="row.UpdateInfo" class="flex gap-2.5 rounded-lg bg-accent-soft px-3 py-2.5 text-sm">
+      <span class="flex-none font-semibold text-accent">更新说明</span>
       <span>{{ row.UpdateInfo }}</span>
     </div>
 
-    <footer class="card__foot">
-      <code class="card__path" :title="row.repoPath">{{ row.repoPath }}</code>
-      <div class="card__actions">
-        <button class="btn btn--ghost" type="button" @click="copyGuid">
+    <footer
+      class="mt-0.5 flex flex-wrap items-center justify-between gap-3 border-t border-line-soft pt-3"
+    >
+      <code class="min-w-0 font-mono text-xs text-fg-muted wrap-anywhere" :title="row.repoPath">{{
+        row.repoPath
+      }}</code>
+      <div class="flex flex-none gap-2">
+        <AppButton variant="ghost" size="sm" @click="copyGuid">
           {{ copied ? '已复制' : '复制 GUID' }}
-        </button>
-        <button class="btn" type="button" :disabled="downloading" @click="download">
+        </AppButton>
+        <AppButton size="sm" :disabled="downloading" @click="download">
           {{ downloading ? '下载中…' : '下载 .cs' }}
-        </button>
+        </AppButton>
       </div>
     </footer>
   </article>
 </template>
-
-<style scoped>
-.card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 20px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border-soft);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
-}
-
-.card:hover {
-  border-color: var(--border);
-  box-shadow: var(--shadow-md);
-  transform: translateY(-1px);
-}
-
-.card__head {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.card__name {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.card__meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 13px;
-}
-
-.card__territories {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin: 0;
-}
-
-.card__note {
-  margin: 0;
-  color: var(--text);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.card__update {
-  display: flex;
-  gap: 10px;
-  padding: 10px 12px;
-  background: var(--accent-soft);
-  border-radius: var(--radius-sm);
-  font-size: 14px;
-}
-
-.card__update-label {
-  flex: none;
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.card__foot {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-top: 2px;
-  padding-top: 12px;
-  border-top: 1px solid var(--border-soft);
-}
-
-.card__path {
-  min-width: 0;
-  color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
-  font-size: 12px;
-  overflow-wrap: anywhere;
-}
-
-.card__actions {
-  display: flex;
-  gap: 8px;
-  flex: none;
-}
-
-.card__actions .btn {
-  height: 32px;
-  padding: 0 12px;
-  font-size: 13px;
-}
-
-.card__actions .btn:disabled {
-  cursor: progress;
-  opacity: 0.6;
-}
-</style>

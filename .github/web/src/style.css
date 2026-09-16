@@ -1,180 +1,71 @@
-:root {
-  color-scheme: light dark;
+@import 'tailwindcss';
 
-  --bg: light-dark(#f5f6f8, #0d1117);
-  --bg-elev: light-dark(#ffffff, #161b22);
-  --bg-subtle: light-dark(#eef0f3, #1c2128);
-  --border: light-dark(#d7dce2, #30363d);
-  --border-soft: light-dark(#e6e9ed, #262c34);
-  --text: light-dark(#1f2328, #e6edf3);
-  --text-muted: light-dark(#5b6570, #9198a1);
-  --accent: light-dark(#a35a00, #e5a52a);
-  --accent-soft: light-dark(#fdf0d5, #2f2607);
-  --accent-contrast: light-dark(#ffffff, #1f2328);
-  --danger: light-dark(#b42318, #ff7b72);
+/* 站点令牌。整站只有深色一套配色，不做主题切换，所以直接写固定值：
+   canvas 是背景 rgb(25,25,25)，accent 是主题色：色相固定在 43°（金），B 通道保持 0
+   吃满饱和度，亮度按深色底上的可读性往上取，其余都是中性灰，
+   让金色成为页面上唯一的彩色。
+   灰色那几档刻意和 canvas 拉开一截（25 → 45），卡片和次要按钮才不至于糊在背景里。 */
+@theme {
+  --font-sans:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'PingFang SC',
+    'Hiragino Sans GB', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'Cascadia Code', Consolas, monospace;
 
-  --radius: 12px;
-  --radius-sm: 8px;
-  --shadow-sm: 0 1px 2px rgb(0 0 0 / 6%);
-  --shadow-md: 0 1px 2px rgb(0 0 0 / 6%), 0 8px 24px rgb(0 0 0 / 8%);
+  --color-canvas: #191919;
+  --color-surface: #2d2d2d;
+  --color-subtle: #363636;
+  --color-code: #262626;
+  --color-line: #4a4a4a;
+  --color-line-soft: #3e3e3e;
+  /* 仅用于 hover 描边：比 line 亮得多、又不到纯白，避免 hover 时刺眼 */
+  --color-line-bright: #a6a6a6;
+  --color-fg: #ededed;
+  --color-fg-muted: #a3a3a3;
+  --color-accent: #e2a400;
+  --color-accent-bright: #f5b200;
+  --color-accent-soft: rgb(226 164 0 / 14%);
+  --color-danger: #ff7b72;
+
+  /* 站点自己的两级阴影，覆盖 Tailwind 同名默认值：shadow-sm / shadow-md 取的就是这里。 */
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 40%);
+  --shadow-md: 0 1px 2px rgb(0 0 0 / 40%), 0 8px 24px rgb(0 0 0 / 35%);
+
+  /* 「板块」hover 时的主题色辉光，配合白色描边一起用 */
+  --shadow-glow: 0 0 22px rgb(226 164 0 / 30%);
+
+  /* 正文统一 1.6 行高，而 Tailwind 的字号工具类会附一档更紧的行高（text-xs 是 1.33），
+     小字号元素会因此比周围矮一截、把卡片高度带偏，这里改回 1.6。
+     用 [13px] 这种任意值写法不带行高，不受影响。 */
+  --text-xs--line-height: 1.6;
+  --text-sm--line-height: 1.6;
 }
 
-/* 手动切换主题：给 <html> 加 data-theme，未设置时跟随系统。
-   light-dark() 会按生效的 color-scheme 取值，所以深色变量只需写一份。 */
-:root[data-theme='light'] {
-  color-scheme: light;
-}
+@layer base {
+  /* 只有一套深色：告诉浏览器按深色渲染原生控件（滚动条、表单、下拉框）。 */
+  :root {
+    color-scheme: dark;
+  }
 
-:root[data-theme='dark'] {
-  color-scheme: dark;
-}
+  :focus-visible {
+    @apply rounded outline-2 outline-offset-2 outline-accent;
+  }
 
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+  /* 锚点跳转要落在吸顶头部的下面，否则标题会被挡住。 */
+  [id] {
+    scroll-margin-top: 72px;
+  }
 
-html {
-  -webkit-text-size-adjust: 100%;
-}
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
+  }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei',
-    'PingFang SC', 'Hiragino Sans GB', sans-serif;
-  font-size: 15px;
-  line-height: 1.6;
-  -webkit-font-smoothing: antialiased;
-}
-
-a {
-  color: var(--accent);
-  text-decoration: none;
-}
-
-a:hover {
-  text-decoration: underline;
-}
-
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
-
-button,
-input,
-select {
-  font: inherit;
-  color: inherit;
-}
-
-/* ---------- 通用控件 ---------- */
-
-.field {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 10px;
-  height: 38px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.field:focus-within {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent);
-}
-
-.field input,
-.field select {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0;
-  border: 0;
-  background: none;
-  outline: none;
-  appearance: none;
-}
-
-.field select {
-  cursor: pointer;
-  padding-right: 4px;
-}
-
-.field__icon {
-  flex: none;
-  color: var(--text-muted);
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 38px;
-  padding: 0 14px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: background 0.15s ease, border-color 0.15s ease;
-}
-
-.btn:hover {
-  background: var(--bg-subtle);
-}
-
-.btn--ghost {
-  border-color: transparent;
-  background: none;
-  color: var(--text-muted);
-}
-
-.btn--ghost:hover {
-  background: var(--bg-subtle);
-  color: var(--text);
-}
-
-/* ---------- 徽章 ---------- */
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 8px;
-  border-radius: 999px;
-  background: var(--bg-subtle);
-  color: var(--text-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.badge--accent {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-  white-space: nowrap;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
+  /* 全站关掉动效。这条没法拆成工具类，只能留在 base 里。 */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+    }
   }
 }

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppButton from './AppButton.vue'
 import AppIcon from './AppIcon.vue'
 import { useCopy } from '../useCopy'
@@ -6,13 +8,14 @@ import { useCopy } from '../useCopy'
 /** 一条要用户抄进插件里的地址：可点复制，也可以直接划选。 */
 const props = defineProps<{ label: string; value: string; hint?: string }>()
 
+const { t } = useI18n()
 const { state, copy } = useCopy()
 
-const LABEL = {
-  idle: '复制地址',
-  copied: '已复制',
-  failed: '复制失败',
-} as const
+const LABEL = computed(() => ({
+  idle: t('common.copyAddress'),
+  copied: t('common.copied'),
+  failed: t('common.copyFailed'),
+}))
 </script>
 
 <template>

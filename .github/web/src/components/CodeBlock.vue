@@ -1,17 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppIcon from './AppIcon.vue'
 import { useCopy } from '../useCopy'
 
 /** 代码片段：整体（含标题栏）就是一个可复制单元，省得用户手动划选。 */
 const props = defineProps<{ title: string; code: string }>()
 
+const { t } = useI18n()
 const { state, copy } = useCopy()
 
-const LABEL = {
-  idle: '复制',
-  copied: '已复制',
-  failed: '复制失败',
-} as const
+const LABEL = computed(() => ({
+  idle: t('common.copy'),
+  copied: t('common.copied'),
+  failed: t('common.copyFailed'),
+}))
 </script>
 
 <template>

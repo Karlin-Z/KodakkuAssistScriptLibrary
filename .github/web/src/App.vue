@@ -6,9 +6,13 @@ import ExamplesSection from './sections/ExamplesSection.vue'
 import HomeSection from './sections/HomeSection.vue'
 import StartSection from './sections/StartSection.vue'
 import { useActiveSection } from './sections'
+import { useDocumentMeta } from './useDocumentMeta'
 
 // 板块依次排在一页里，靠滚动切换；导航高亮由 useActiveSection 跟着滚动更新。
 useActiveSection()
+
+// 标题 / 简介 / <html lang> 由语言决定，在这里挂一次就好。
+useDocumentMeta()
 </script>
 
 <template>

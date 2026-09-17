@@ -3,12 +3,10 @@ import { onMounted, onUnmounted, ref } from 'vue'
 /**
  * 板块锚点。整站是一页从上往下滚，板块顺序就是这里的顺序。
  * 主页（`#top`）不进菜单 —— 顶栏图标点的就是它。
+ *
+ * 这里只留 id：名字是文案，跟着语言走，用的时候取 `nav.<id>`。
  */
-export const NAV = [
-  { id: 'examples', label: '示例' },
-  { id: 'start', label: '开始' },
-  { id: 'contribute', label: '贡献' },
-] as const
+export const NAV = [{ id: 'examples' }, { id: 'start' }, { id: 'contribute' }] as const
 
 export type SectionId = (typeof NAV)[number]['id']
 

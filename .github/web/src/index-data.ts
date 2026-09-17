@@ -1,8 +1,15 @@
-import { parseTime } from './format'
+import { i18n } from './i18n'
 import type { ScriptEntry, ScriptRow } from './types'
 
 /** 站点根目录的合并索引，由 merge_repos.mjs 生成。 */
 const INDEX_URL = `${import.meta.env.BASE_URL}index.json`
+
+/** `2026-09-12T05:46:17Z` -> 时间戳；缺失或不合法时返回 0。 */
+function parseTime(value: string | undefined): number {
+  if (!value) return 0
+  const ts = Date.parse(value)
+  return Number.isNaN(ts) ? 0 : ts
+}
 
 /**
  * 从 raw 直链反推贡献者目录与仓库内路径。
@@ -11,14 +18,16 @@ const INDEX_URL = `${import.meta.env.BASE_URL}index.json`
  * 去掉协议与前三段后，余下第一段就是贡献者目录。这里假定分支名不含斜杠（本仓库是 main）。
  */
 function splitRepoPath(rawUrl: string): { contributor: string; repoPath: string } {
+  // 这里在组件之外，拿不到 useI18n，兜底文案走全局实例（取当前语言）
+  const unknown = i18n.global.t('common.unknown')
   let segments: string[]
   try {
     segments = new URL(rawUrl).pathname.split('/').filter(Boolean)
   } catch {
-    return { contributor: '未知', repoPath: '' }
+    return { contributor: unknown, repoPath: '' }
   }
-  if (segments.length < 5) return { contributor: '未知', repoPath: '' }
-  return { contributor: segments[3] ?? '未知', repoPath: segments.slice(4).join('/') }
+  if (segments.length < 5) return { contributor: unknown, repoPath: '' }
+  return { contributor: segments[3] ?? unknown, repoPath: segments.slice(4).join('/') }
 }
 
 function toRow(entry: ScriptEntry): ScriptRow {
@@ -36,11 +45,11 @@ function toRow(entry: ScriptEntry): ScriptRow {
 export async function loadIndex(signal?: AbortSignal): Promise<ScriptRow[]> {
   const response = await fetch(INDEX_URL, { signal, cache: 'no-cache' })
   if (!response.ok) {
-    throw new Error(`索引请求失败（HTTP ${response.status}）`)
+    throw new Error(i18n.global.t('errors.indexHttp', { status: response.status }))
   }
   const payload: unknown = await response.json()
   if (!Array.isArray(payload)) {
-    throw new Error('索引格式不正确：顶层不是数组')
+    throw new Error(i18n.global.t('errors.indexShape'))
   }
   return (payload as ScriptEntry[]).map(toRow)
 }

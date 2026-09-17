@@ -1,14 +1,18 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { links } from '../links'
 import { NAV, TOP_ID } from '../sections'
 
+const { t } = useI18n()
+
 const YEAR = new Date().getFullYear()
 
-const RESOURCES = [
-  { href: links.discord, label: 'Discord' },
-  { href: links.repo, label: 'GitHub 仓库' },
-  { href: links.guide, label: '脚本说明书' }
-]
+const RESOURCES = computed(() => [
+  { href: links.discord, label: t('footer.discord') },
+  { href: links.repo, label: t('footer.repo') },
+  { href: links.guide, label: t('footer.guide') },
+])
 </script>
 
 <template>
@@ -16,29 +20,28 @@ const RESOURCES = [
     <div class="mx-auto max-w-[1080px] px-5 py-10 max-[620px]:px-4">
       <div class="flex flex-wrap items-start justify-between gap-10">
         <p class="max-w-[400px] text-[13px] text-fg-muted">
-          <strong class="mb-1.5 block font-semibold text-fg">可达鸭 KodakkuAssist</strong>
-          FF14「卫月」战斗机制辅助插件的官方在线脚本库。本库与插件均为玩家社区作品，与
-          Square Enix 无关；使用第三方插件存在风险，请自行判断。
+          <strong class="mb-1.5 block font-semibold text-fg">{{ t('footer.brand') }}</strong>
+          {{ t('footer.about') }}
         </p>
 
         <div class="flex flex-wrap gap-x-14 gap-y-6">
           <nav>
-            <p class="mb-2.5 text-[12.5px] font-medium text-fg">板块</p>
+            <p class="mb-2.5 text-[12.5px] font-medium text-fg">{{ t('footer.sections') }}</p>
             <ul class="flex flex-col gap-2 text-[13px]">
               <li>
                 <a class="text-fg-muted transition hover:text-accent-bright" :href="`#${TOP_ID}`">
-                  主页
+                  {{ t('nav.home') }}
                 </a>
               </li>
               <li v-for="item in NAV" :key="item.id">
                 <a class="text-fg-muted transition hover:text-accent-bright" :href="`#${item.id}`">
-                  {{ item.label }}
+                  {{ t(`nav.${item.id}`) }}
                 </a>
               </li>
             </ul>
           </nav>
           <div>
-            <p class="mb-2.5 text-[12.5px] font-medium text-fg">资源</p>
+            <p class="mb-2.5 text-[12.5px] font-medium text-fg">{{ t('footer.resources') }}</p>
             <ul class="flex flex-col gap-2 text-[13px]">
               <li v-for="item in RESOURCES" :key="item.href">
                 <a
@@ -55,7 +58,7 @@ const RESOURCES = [
       </div>
 
       <p class="mt-8 border-t border-line-soft pt-5 text-[12px] text-fg-muted">
-        © {{ YEAR }} 可达鸭 KodakkuAssist
+        {{ t('footer.copyright', { year: YEAR }) }}
       </p>
     </div>
   </footer>

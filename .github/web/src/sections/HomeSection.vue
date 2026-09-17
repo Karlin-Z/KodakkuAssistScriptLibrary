@@ -1,32 +1,25 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { I18nT, useI18n } from 'vue-i18n'
 import logoUrl from '../../assets/logo.svg'
 import AppIcon from '../components/AppIcon.vue'
 import AppLink from '../components/AppLink.vue'
 import FeatureCard from '../components/FeatureCard.vue'
-import { formatDate } from '../format'
 import type { IconName } from '../icons'
 import { links } from '../links'
 import { loadStats, type LibraryStats } from '../site-stats'
 import { PAGE_PAD } from '../ui'
+import { useFormat } from '../useFormat'
 
-const FEATURES: { icon: IconName; title: string; body: string }[] = [
-  {
-    icon: 'shapes',
-    title: 'AOE 绘制',
-    body: '可使用游戏内同款 AOE 特效，绘制出副本内原本不可见的 AOE 范围以及场地安全区，让你放空大脑，自由走位。',
-  },
-  {
-    icon: 'broadcast',
-    title: 'TTS 播报',
-    body: '屏幕中央横幅文字、聊天文本、TTS 语音朗读等多种方式，来提醒你副本机制。',
-  },
-  {
-    icon: 'bolt',
-    title: '高度可定制化',
-    body: '插件拥有完整的脚本定制接口，通过 C# 语言，你可以根据自己的需求，编写自己的绘制脚本。',
-  },
-]
+const { t } = useI18n()
+const { formatDate } = useFormat()
+
+/** 图标固定在代码里，文案跟着语言走，所以整个数组用 computed 包起来。 */
+const FEATURES = computed<{ icon: IconName; title: string; body: string }[]>(() => [
+  { icon: 'shapes', title: t('features.aoe.title'), body: t('features.aoe.body') },
+  { icon: 'broadcast', title: t('features.tts.title'), body: t('features.tts.body') },
+  { icon: 'bolt', title: t('features.customize.title'), body: t('features.customize.body') },
+])
 
 /** 统计还没到时的占位符，免得四个格子先塌下去再撑开。 */
 const PLACEHOLDER = '—'
@@ -44,10 +37,13 @@ onMounted(async () => {
 })
 
 const statItems = computed(() => [
-  { label: '在线脚本', value: stats.value ? String(stats.value.scripts) : PLACEHOLDER },
-  { label: '贡献者', value: stats.value ? String(stats.value.contributors) : PLACEHOLDER },
-  { label: '覆盖地图', value: stats.value ? String(stats.value.territories) : PLACEHOLDER },
-  { label: '最近更新', value: stats.value ? formatDate(stats.value.updatedAt) : PLACEHOLDER },
+  { label: t('stats.scripts'), value: stats.value ? String(stats.value.scripts) : PLACEHOLDER },
+  { label: t('stats.contributors'), value: stats.value ? String(stats.value.contributors) : PLACEHOLDER },
+  { label: t('stats.territories'), value: stats.value ? String(stats.value.territories) : PLACEHOLDER },
+  {
+    label: t('stats.updatedAt'),
+    value: stats.value ? formatDate(stats.value.updatedAt) : PLACEHOLDER,
+  },
 ])
 </script>
 
@@ -74,7 +70,7 @@ const statItems = computed(() => [
       <div class="flex flex-col items-center text-center">
         <img
           :src="logoUrl"
-          alt="可达鸭 KodakkuAssist"
+          :alt="t('footer.brand')"
           class="h-25 w-auto mb-5 select-none"
           draggable="false"
           @dragstart.prevent
@@ -105,19 +101,27 @@ const statItems = computed(() => [
             />
           </svg>
 
+          <!--
+            主标题里那个带主题色的短语位置各语言不同（中文在中间、日文在句首动作前），
+            所以整句交给译文，只把 {accent} 这一处插槽留出来上色，而不是把句子拆成前后两段。
+          -->
           <h1
             class="relative max-w-220 text-[30px] leading-[1.2] font-bold tracking-[-0.02em] text-balance sm:text-[40px] lg:text-[50px]"
           >
-            把战斗机制<span class="text-accent whitespace-nowrap">画于脚下</span>，报于耳边
+            <I18nT keypath="hero.title">
+              <template #accent>
+                <span class="text-accent whitespace-nowrap">{{ t('hero.accent') }}</span>
+              </template>
+            </I18nT>
           </h1>
         </div>
 
         <p class="relative mt-5 max-w-155 text-pretty text-fg-muted sm:text-[16.5px]">
-          可达鸭（KodakkuAssist）是 FF14「卫月」框架下的战斗机制辅助插件。它可以绘制副本内原本不可见的 AOE 范围以及场地安全区；同时可以通过 TTS 播报副本的机制，达到替代老旧 ACT 的 TTS 功能。
+          {{ t('hero.lead') }}
         </p>
 
         <div class="relative mt-7 flex flex-wrap justify-center gap-3">
-          <AppLink href="#start" variant="primary" size="lg">开始使用</AppLink>
+          <AppLink href="#start" variant="primary" size="lg">{{ t('hero.getStarted') }}</AppLink>
           <AppLink :href="links.discord" variant="solid" size="lg" external>
             <AppIcon name="chat" />
             Discord
@@ -126,11 +130,11 @@ const statItems = computed(() => [
       </div>
 
       <!-- 功能：紧接标题区，不再单列一节标题，把一屏留给卡片 -->
-      <h2 class="sr-only">功能</h2>
+      <h2 class="sr-only">{{ t('hero.featuresLabel') }}</h2>
       <div class="mt-40 grid gap-3.5 max-[620px]:mt-8 sm:grid-cols-2 lg:grid-cols-3">
         <FeatureCard
           v-for="feature in FEATURES"
-          :key="feature.title"
+          :key="feature.icon"
           :icon="feature.icon"
           :title="feature.title"
           :body="feature.body"

@@ -1,18 +1,25 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import AppBadge from './AppBadge.vue'
 import AppButton from './AppButton.vue'
-import { formatDate, formatRelative } from '../format'
 import type { ScriptRow } from '../types'
+import { useFormat } from '../useFormat'
 
 /** 超过这个数量的地图标签折叠成 `+N`，避免个别脚本把一整行塞满。 */
 const MAX_TERRITORIES = 8
 
 const props = defineProps<{ row: ScriptRow }>()
 
+const { t } = useI18n()
+const { formatDate, formatRelative } = useFormat()
+
 const territories = computed(() => props.row.TerritoryIds ?? [])
 const shownTerritories = computed(() => territories.value.slice(0, MAX_TERRITORIES))
 const hiddenTerritories = computed(() => Math.max(0, territories.value.length - MAX_TERRITORIES))
+
+/** 折叠起来的那些地图 id 挂在 title 上，连接符按语言走（中文顿号、英文逗号）。 */
+const hiddenTitle = computed(() => territories.value.join(t('common.listSeparator')))
 
 const copied = ref(false)
 let copyTimer: number | undefined
@@ -70,23 +77,23 @@ async function download(): Promise<void> {
       <span aria-hidden="true">·</span>
       <span>{{ row.contributor }}</span>
       <span aria-hidden="true">·</span>
-      <span :title="formatDate(row.updatedAt)">更新于 {{ formatRelative(row.updatedAt) }}</span>
+      <span :title="formatDate(row.updatedAt)">
+        {{ t('card.updated', { time: formatRelative(row.updatedAt) }) }}
+      </span>
     </p>
 
     <p class="flex flex-wrap gap-1.5">
       <template v-if="territories.length">
-        <AppBadge v-for="id in shownTerritories" :key="id">地图 {{ id }}</AppBadge>
-        <AppBadge v-if="hiddenTerritories" :title="territories.join('、')">
-          +{{ hiddenTerritories }}
-        </AppBadge>
+        <AppBadge v-for="id in shownTerritories" :key="id">{{ t('card.map', { id }) }}</AppBadge>
+        <AppBadge v-if="hiddenTerritories" :title="hiddenTitle">+{{ hiddenTerritories }}</AppBadge>
       </template>
-      <AppBadge v-else>不限地图</AppBadge>
+      <AppBadge v-else>{{ t('card.anyTerritory') }}</AppBadge>
     </p>
 
     <p v-if="row.Note" class="whitespace-pre-wrap text-fg wrap-anywhere">{{ row.Note }}</p>
 
     <div v-if="row.UpdateInfo" class="flex gap-2.5 rounded-lg bg-accent-soft px-3 py-2.5 text-sm">
-      <span class="flex-none font-semibold text-accent">更新说明</span>
+      <span class="flex-none font-semibold text-accent">{{ t('card.updateNote') }}</span>
       <span>{{ row.UpdateInfo }}</span>
     </div>
 
@@ -98,10 +105,10 @@ async function download(): Promise<void> {
       }}</code>
       <div class="flex flex-none gap-2">
         <AppButton variant="ghost" size="sm" @click="copyGuid">
-          {{ copied ? '已复制' : '复制 GUID' }}
+          {{ copied ? t('common.copied') : t('card.copyGuid') }}
         </AppButton>
         <AppButton size="sm" :disabled="downloading" @click="download">
-          {{ downloading ? '下载中…' : '下载 .cs' }}
+          {{ downloading ? t('card.downloading') : t('card.download') }}
         </AppButton>
       </div>
     </footer>

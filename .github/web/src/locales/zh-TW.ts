@@ -54,13 +54,18 @@ const zhTW: MessageSchema = {
       title: '高度可自訂',
       body: '外掛擁有完整的腳本自訂介面，透過 C# 語言，你可以依照自己的需求，編寫自己的繪製腳本。',
     },
+    free: {
+      title: '永久免費',
+      body: '外掛永久免費，小心提防所有需要付費取得的管道！',
+    },
   },
 
   stats: {
-    scripts: '線上腳本',
+    users: '使用者',
+    usersValue: '2 萬+',
+    scripts: '腳本',
     contributors: '貢獻者',
-    territories: '涵蓋地圖',
-    updatedAt: '最近更新',
+    territories: '涵蓋副本',
   },
 
   examples: {

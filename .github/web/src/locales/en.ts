@@ -57,13 +57,19 @@ const en: MessageSchema = {
       title: 'Highly customizable',
       body: 'A complete scripting interface: write your own drawing scripts in C# to match exactly what you need.',
     },
+    free: {
+      title: 'Free forever',
+      body: 'The plugin is free forever. Beware of any channel that charges you to get it!',
+    },
   },
 
   stats: {
-    scripts: 'Scripts online',
+    users: 'Users',
+    usersValue: '20,000+',
+    scripts: 'Scripts',
     contributors: 'Contributors',
-    territories: 'Territories',
-    updatedAt: 'Last update',
+    /** 「副本」= duty：the territories a script declares support for */
+    territories: 'Duties',
   },
 
   examples: {

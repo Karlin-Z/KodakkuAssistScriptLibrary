@@ -57,13 +57,20 @@ const zhCN = {
       title: '高度可定制化',
       body: '插件拥有完整的脚本定制接口，通过 C# 语言，你可以根据自己的需求，编写自己的绘制脚本。',
     },
+    free: {
+      title: '永久免费',
+      body: '插件永久免费，小心提防所有需要付费获取的渠道！',
+    },
   },
 
   stats: {
-    scripts: '在线脚本',
+    users: '用户',
+    /** 用户数是外部给的概数，不进索引；写法跟着语言走（中文说「万」，英文说 20,000） */
+    usersValue: '2W+',
+    scripts: '脚本',
     contributors: '贡献者',
-    territories: '覆盖地图',
-    updatedAt: '最近更新',
+    /** 这里的「副本」对应 ScriptEntry.TerritoryIds，即脚本声明支持的地图 */
+    territories: '覆盖副本',
   },
 
   examples: {

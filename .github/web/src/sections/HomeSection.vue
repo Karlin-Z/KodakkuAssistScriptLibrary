@@ -9,16 +9,15 @@ import type { IconName } from '../icons'
 import { links } from '../links'
 import { loadStats, type LibraryStats } from '../site-stats'
 import { PAGE_PAD } from '../ui'
-import { useFormat } from '../useFormat'
 
 const { t } = useI18n()
-const { formatDate } = useFormat()
 
 /** 图标固定在代码里，文案跟着语言走，所以整个数组用 computed 包起来。 */
 const FEATURES = computed<{ icon: IconName; title: string; body: string }[]>(() => [
   { icon: 'shapes', title: t('features.aoe.title'), body: t('features.aoe.body') },
   { icon: 'broadcast', title: t('features.tts.title'), body: t('features.tts.body') },
   { icon: 'bolt', title: t('features.customize.title'), body: t('features.customize.body') },
+  { icon: 'gift', title: t('features.free.title'), body: t('features.free.body') },
 ])
 
 /** 统计还没到时的占位符，免得四个格子先塌下去再撑开。 */
@@ -37,13 +36,11 @@ onMounted(async () => {
 })
 
 const statItems = computed(() => [
+  // 用户数是外部给的概数，不来自索引，所以只有它没有「还没取到」的占位
+  { label: t('stats.users'), value: t('stats.usersValue') },
   { label: t('stats.scripts'), value: stats.value ? String(stats.value.scripts) : PLACEHOLDER },
   { label: t('stats.contributors'), value: stats.value ? String(stats.value.contributors) : PLACEHOLDER },
   { label: t('stats.territories'), value: stats.value ? String(stats.value.territories) : PLACEHOLDER },
-  {
-    label: t('stats.updatedAt'),
-    value: stats.value ? formatDate(stats.value.updatedAt) : PLACEHOLDER,
-  },
 ])
 </script>
 
@@ -131,7 +128,7 @@ const statItems = computed(() => [
 
       <!-- 功能：紧接标题区，不再单列一节标题，把一屏留给卡片 -->
       <h2 class="sr-only">{{ t('hero.featuresLabel') }}</h2>
-      <div class="mt-40 grid gap-3.5 max-[620px]:mt-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div class="mt-40 grid gap-3.5 max-[620px]:mt-8 sm:grid-cols-2 lg:grid-cols-4">
         <FeatureCard
           v-for="feature in FEATURES"
           :key="feature.icon"

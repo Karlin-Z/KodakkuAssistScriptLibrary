@@ -54,6 +54,14 @@ export const ICON_PATHS = {
   ],
   /** 展开：向下的小箭头（语言菜单这类折叠入口） */
   chevron: ['M6 9.5 12 15.5 18 9.5'],
+  /** 免费：礼盒（缎带 + 蝴蝶结） */
+  gift: [
+    'M20 12v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9',
+    'M2 7h20v5H2z',
+    'M12 7v15',
+    'M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z',
+    'M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z',
+  ],
 } as const
 
 export type IconName = keyof typeof ICON_PATHS

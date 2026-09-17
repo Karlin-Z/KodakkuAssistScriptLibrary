@@ -56,13 +56,19 @@ const ja: MessageSchema = {
       title: '高いカスタマイズ性',
       body: 'スクリプト向けの API が一通り揃っています。C# で自分の用途に合わせた描画スクリプトを書けます。',
     },
+    free: {
+      title: '永久無料',
+      body: 'プラグインは永久無料です。有料で配布しているチャンネルには十分ご注意ください！',
+    },
   },
 
   stats: {
-    scripts: 'オンラインスクリプト',
+    users: 'ユーザー',
+    usersValue: '2万+',
+    scripts: 'スクリプト',
     contributors: 'コントリビューター',
-    territories: '対応テリトリー',
-    updatedAt: '最終更新',
+    /** 「副本」= コンテンツ：スクリプトが対応を宣言しているテリトリー */
+    territories: '対応コンテンツ',
   },
 
   examples: {

@@ -862,5 +862,253 @@
       825,
       1302
     ]
+  },
+  {
+    "Name": "UCOB [巴哈姆特绝境战]",
+    "Guid": "884e415a-1210-44cc-bdff-8fab6878e87d",
+    "Version": "0.0.2.3",
+    "Author": "Joshua and Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/04-StormBlood/UCOB.cs",
+    "Note": "基于@Joshua的巴哈初版程序改写扩充，\n感谢合作者@KnightRider，@Meva。\n请先按需求检查并设置“用户设置”栏目。\n鸭门。",
+    "UpdateInfo": "1. 现在若引导俯冲的不是自己，将不会再进行指路",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      733
+    ]
+  },
+  {
+    "Name": "绝巴哈姆特 Reborn",
+    "Guid": "e2e37136-72a2-46b0-abc7-ade17da161b7",
+    "Version": "0.0.0.4",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/04-StormBlood/UcobReborn/UcobReborn.cs",
+    "Note": "0.0.0.4\n基于 UCOB [巴哈姆特绝境战] 脚本的重置版。\n加了很多很多东西。\n原脚本作者：Joshua，Meva，KnightRider，Usami",
+    "UpdateInfo": "0.0.0.4\n1. 移除了 P3F_踩塔判定倒计时。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      733
+    ]
+  },
+  {
+    "Name": "ASS [异闻希拉狄哈水道]",
+    "Guid": "bdd73dbd-2a93-4232-9324-0c9093d4a646",
+    "Version": "0.0.1.5",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/ASS.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目，\n并在/KTeam中设置 T>H>近>远。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1075,
+      1076
+    ]
+  },
+  {
+    "Name": "Lv87 [创造环境极北造物院]",
+    "Guid": "8d4e4a9c-b144-4ec2-82cd-46b38867e4e6",
+    "Version": "0.0.0.2",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Lv87_KtisisHyperboreia.cs",
+    "Note": "仅老二老三，别吃dot了别吃dot了！",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      974
+    ]
+  },
+  {
+    "Name": "Rubicante [卢比坎特歼灭战]",
+    "Guid": "dd6bb7eb-c051-4406-8ec3-ff3523c753ee",
+    "Version": "0.0.0.2",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Rubicante.cs",
+    "Note": "v0.0.0.2:\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1095
+    ]
+  },
+  {
+    "Name": "Rubicante-Ex [卢比坎特歼殛战]",
+    "Guid": "a5f70ab7-b79a-468c-9ffe-3c7e5091d71d",
+    "Version": "0.0.0.4",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/RubicanteEx.cs",
+    "Note": "v0.0.0.4:\n很遗憾，大转盘必须Imgui。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1096
+    ]
+  },
+  {
+    "Name": "Zodiark [佐迪亚克歼灭战]",
+    "Guid": "ed3f32fe-fc12-4485-baa4-bec6c357e70b",
+    "Version": "0.0.0.3",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Zodiark.cs",
+    "Note": "v0.0.0.3:\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      992
+    ]
+  },
+  {
+    "Name": "Zodiark-Ex [佐迪亚克暝暗歼灭战]",
+    "Guid": "e24a0c8b-5c41-4e58-87c3-355f1f925986",
+    "Version": "0.0.0.6",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/ZodiarkEx.cs",
+    "Note": "v0.0.0.6:\n鸭门。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      993
+    ]
+  },
+  {
+    "Name": "P12S [零式万魔殿 荒天之狱4]",
+    "Guid": "563bd710-59b8-46de-bbac-f1527d7c0803",
+    "Version": "0.0.0.11",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p12s.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目。\n门神到超链后对话，本体到黑白塔。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1154
+    ]
+  },
+  {
+    "Name": "P4S [零式万魔殿 边境之狱4]",
+    "Guid": "de9e31e6-d040-48e3-bf0b-aa4e2643f79d",
+    "Version": "0.0.0.5",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p4s.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目。\n“逃课”即为黑糖荔枝攻略演示。\n门神仅线毒提示，本体到二运。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1009
+    ]
+  },
+  {
+    "Name": "P8S [零式万魔殿 炼净之狱4]",
+    "Guid": "97df6974-c726-4a00-9016-293c184adf5c",
+    "Version": "0.0.0.7",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p8s.cs",
+    "Note": "v0.0.0.7\n一车设置场中H2，正右ST。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1088
+    ]
+  },
+  {
+    "Name": "DSR_Patch [幻想龙诗绝境战 补丁]",
+    "Guid": "cc6fb606-ff7b-4739-81aa-4861b204ab1e",
+    "Version": "0.0.0.16",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/DSR/DSR_Patch.cs",
+    "Note": "基于K佬绝龙诗绘图的个人向补充，\n请先按需求检查并设置“用户设置”栏目。\n在忆罪宫输入\"/e =Exaflare\"可以测试地火特殊跑法。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      968,
+      1112
+    ]
+  },
+  {
+    "Name": "绝欧精装 Reborn",
+    "Guid": "6272e52b-5500-4ff0-8634-dd15f2e3b25e",
+    "Version": "0.0.0.18",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/TopReborn/TopReborn.cs",
+    "Note": "v0.0.0.18\n修改自Karlin/Meva的脚本，\n谨慎使用特殊功能。",
+    "UpdateInfo": "0.0.0.18\n1. 适配 P5 二运在女人击退踩塔时标点的指挥逻辑，以解决 P5 二运后半不指路的问题。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1122
+    ]
+  },
+  {
+    "Name": "FRU_Patch [光暗未来绝境战 补丁]",
+    "Guid": "3076a62b-127e-468e-96d3-4f1d559857ec",
+    "Version": "0.0.0.12",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/FRU/FRU_Patch.cs",
+    "Note": "v0.0.0.12\n指挥模式对P3二运有效。\n若开启指挥模式，将执行近战优化标点。（固定MT左与D1右，并非固定MT左与ST右！）\n不论MT或ST引导，双T都会收到引导方向提示。\n若发生问题请携ARR反馈。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1238
+    ]
+  },
+  {
+    "Name": "M6S [零式阿卡狄亚 中量级2]",
+    "Guid": "4f5decb5-4a78-4e83-96c8-09678761a751",
+    "Version": "0.0.0.15",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/M6S/M6S.cs",
+    "Note": "v0.0.0.15\n请先于用户设置中调整整体策略（Game8/CnServer）。\n待完善。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1259
+    ]
+  },
+  {
+    "Name": "NecronEx [永恒之暗悲惶歼灭战]",
+    "Guid": "1829f7d6-9e64-4cf7-9be4-e5d8a2e03d21",
+    "Version": "0.0.0.7",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/Necron/NecronEx.cs",
+    "Note": "{Version}\n初版，鸭门。",
+    "UpdateInfo": "{Version}\n1. 修复 MT/D1, ST/D2 组在青之二/四重波指路相反的错误。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1296
+    ]
+  },
+  {
+    "Name": "QueenEternalEx [永恒女王忆想歼灭战]",
+    "Guid": "45fff289-e23d-41ab-9039-71cd310668e4",
+    "Version": "0.0.0.9",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/QueenEternal/QueenEternalEx.cs",
+    "Note": "绝对君权为正攻，若逃课请忽略核爆远离指路箭头。\n针对土阶段涉及优先级的踩塔判断，可以开启用户设置中“土阶段四人塔智能优先级判断”。\n若不使用此功能，请确认小队列表排序正确（特别关注D1/D2），避免踩塔指路错误。\n鸭门。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1243
+    ]
+  },
+  {
+    "Name": "绝妖星乱舞_P3",
+    "Guid": "c902dd56-629e-4033-a77f-fb23b8d94745",
+    "Version": "0.0.0.41",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/UDM/UDM_P3.cs",
+    "Note": "0.0.0.41\n二运黑洞\n- 含指路与指挥模式，需在用户设置开启，副本内使用 `/e kdyhd` 可测试标点优先级。\n- * 黑洞指路依赖标点，黑洞出现前需完成整个标点流程。\n- 共有五种优先级配置，其中：\n- * HDT(\"43765812\")：采用 H2 > H1 > D3 > D2 > D1 > D4 > MT > ST\n- * HDT三麻取反(\"437658120\")：基于 HDT，三麻优先级取反（ST > MT > ... > H2)\n- * THD(\"12345678\")：采用 MT > ST > H1 > H2 > D1 > D2 > D3 > D4\n- * 若选择自定义，可从左到右细分各职能标点顺序，支持8位或9位输入。\n- * 前八位由\"1~8\"组成，第九位输入\"0\"代表三麻取反，输入错误则回退到“HDT三麻取反”。\n\n二运黑洞指挥策略 - 美式T2泥3\n- 根据职能与 Buff 固定标点，其本质为 DTH，但固定T摇2。\n- 无Buff D：攻/锁/禁1；无Buff T/H：攻/锁/禁2；泥土 H/D：攻/锁3\n- 可避免T摇攻1禁1满地乱爬、摇攻3卡奥斯离开场中读半场刀、摇锁3白洞前清血的毒点。\n\n特殊方法\n- 屏蔽艾克斯迪司释放钢铁暴雷时的连线\n- 巨大凯夫卡释放上桌技能时透明化\n- 治疗与输出职业在决战 Buff 期间，无法选中不能造成伤害的 Boss",
+    "UpdateInfo": "0.0.0.41\n1. 增加黑洞指示线颜色控制。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "Shinryu-Ur [神龙幻巧战]",
+    "Guid": "fcf45bf5-bb72-42f8-b918-4c4b779fb70c",
+    "Version": "0.0.0.3",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/UnrealShinryu/UnrealShinryu.cs",
+    "Note": "0.0.0.3\n初版",
+    "UpdateInfo": "0.0.0.3\n1. 增加 P1 超新星站水坑安全区提示\n2. 增加 P1 螺旋冲锋危险区提示（怎么压不掉？）",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      730,
+      1372
+    ]
   }
 ]

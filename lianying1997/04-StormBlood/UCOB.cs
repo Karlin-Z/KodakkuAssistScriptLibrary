@@ -17,7 +17,7 @@ using KodakkuAssist.Module.Draw.Manager;
 namespace UsamisScript.StormBlood.Ucob;
 
 [ScriptType(name: "UCOB [巴哈姆特绝境战]", territorys: [733], guid: "884e415a-1210-44cc-bdff-8fab6878e87d",
-    version: "0.0.2.3", author: "Joshua and Usami", note: noteStr, updateInfo: UpdateInfo)]
+    version: "0.0.2.3", author: "Joshua & Usami", note: noteStr, updateInfo: UpdateInfo)]
 public class Ucob
 {
     // TODO
@@ -30,7 +30,7 @@ public class Ucob
     请先按需求检查并设置“用户设置”栏目。
     鸭门。
     """;
-    
+
     private const string UpdateInfo =
         """
         1. 现在若引导俯冲的不是自己，将不会再进行指路
@@ -129,7 +129,7 @@ public class Ucob
     Vector3 BahamutFavorPos = new(0, 0, 0);     // P4以初始拉怪点为12点（右下）
     int ArkMornNum = 0;                         // P5死亡轮回死刑次数
     int MornAfahNum = 0;                        // P5无尽顿悟分摊次数
-    private static readonly Dictionary<(int, int, int, int, int), (int, int, int)> CauterizeSafePos = 
+    private static readonly Dictionary<(int, int, int, int, int), (int, int, int)> CauterizeSafePos =
     new Dictionary<(int, int, int, int, int), (int, int, int)>
     {
         {(1, 2, 3, 4, 5), (11, 5, 7)},
@@ -219,7 +219,7 @@ public class Ucob
 
         HeavensFallDangerPos = [false, false, false, false, false, false, false, false]; // P3天地安全位置（仅判断左右）
         HeavensFallBossPos = [false, false, false, false, false, false, false, false];   // P3天地BOSS所在位置（仅判断左右）
-        HeavensFallTowerPos = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];  // P3天地塔    
+        HeavensFallTowerPos = [false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false];  // P3天地塔
         HeavensFallTowerDrawn = false;          // P3天地塔目标绘图完成记录
 
         isTenStrikeTarget = false;                // P3连击玩家是黑球点名目标
@@ -408,7 +408,7 @@ public class Ucob
             accessory.Method.SendChat($"/e 拘束器数量到3，位置记录完毕。");
         }
     }
-    
+
     [ScriptMethod(name: "【全局】刷新黑球点名目标（不可控）", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:9902"], userControl: false)]
     public void RefreshGenerateTarget(Event @event, ScriptAccessory accessory)
     {
@@ -576,7 +576,7 @@ public class Ucob
         }
         accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
     }
-    
+
     /// <summary>
     /// 将List内信息转换为字符串。
     /// </summary>
@@ -921,7 +921,7 @@ public class Ucob
         dp.Color = accessory.Data.DefaultDangerColor.WithW(0.5f);
         dp.TargetObject = tid;
         accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
-        
+
         var dp0 = accessory.Data.GetDefaultDrawProperties();
         dp0.Name = $"俯冲引导方向{sid}";
         dp0.Scale = new(2.5f, 12.5f);

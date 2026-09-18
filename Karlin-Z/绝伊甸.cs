@@ -20,7 +20,7 @@ using KodakkuAssist.Extensions;
 namespace MyScriptNamespace;
 
 [ScriptType(name: "EdenUltimate", territorys: [1238], guid: "a4e14eff-0aea-a4b6-d8c3-47644a3e9e9a", version: "0.0.0.11",
-    note: noteStr)]
+    author: "Karlin", note: noteStr)]
 public class EdenUltimate
 {
     public enum P1BrightFireEnum

@@ -318,10 +318,10 @@
     "Name": "PiPiScript",
     "Guid": "5ce7ebbd-b47e-d61f-3d94-5423e8e80753",
     "Version": "0.0.0.2",
-    "Author": "Karlin-Z",
+    "Author": "Karlin",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/PiPiScript.cs",
     "Note": "这是一个提示文本.\n他有多行显示.\n请在这里放置你的提示文本",
-    "UpdateTime": "2026-09-12T05:46:17Z"
+    "UpdateTime": "2026-09-18T12:49:28Z"
   },
   {
     "Name": "多变迷宫自动化",
@@ -373,10 +373,10 @@
     "Name": "EdenUltimate",
     "Guid": "a4e14eff-0aea-a4b6-d8c3-47644a3e9e9a",
     "Version": "0.0.0.11",
-    "Author": "Karlin-Z",
+    "Author": "Karlin",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E7%BB%9D%E4%BC%8A%E7%94%B8.cs",
     "Note": "绝伊甸先行版 P4结束\nP3地火站位和水分摊尚无\nP4白圈指示尚无",
-    "UpdateTime": "2026-09-12T05:46:17Z",
+    "UpdateTime": "2026-09-18T12:49:28Z",
     "TerritoryIds": [
       1238
     ]
@@ -867,11 +867,11 @@
     "Name": "UCOB [巴哈姆特绝境战]",
     "Guid": "884e415a-1210-44cc-bdff-8fab6878e87d",
     "Version": "0.0.2.3",
-    "Author": "Joshua and Usami",
+    "Author": "Joshua & Usami",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/04-StormBlood/UCOB.cs",
     "Note": "基于@Joshua的巴哈初版程序改写扩充，\n感谢合作者@KnightRider，@Meva。\n请先按需求检查并设置“用户设置”栏目。\n鸭门。",
     "UpdateInfo": "1. 现在若引导俯冲的不是自己，将不会再进行指路",
-    "UpdateTime": "2026-09-17T01:45:20Z",
+    "UpdateTime": "2026-09-18T12:49:28Z",
     "TerritoryIds": [
       733
     ]

@@ -8,8 +8,6 @@ export interface LibraryStats {
   contributors: number
   /** 所有脚本声明过的地图 ID 并集大小 */
   territories: number
-  /** 最近一次脚本更新的时间戳；拿不到时间时为 0 */
-  updatedAt: number
 }
 
 /**
@@ -21,18 +19,15 @@ export async function loadStats(signal?: AbortSignal): Promise<LibraryStats> {
 
   const contributors = new Set<string>()
   const territories = new Set<number>()
-  let updatedAt = 0
 
   for (const row of rows) {
     contributors.add(row.contributor)
     for (const id of row.TerritoryIds ?? []) territories.add(id)
-    updatedAt = Math.max(updatedAt, row.updatedAt)
   }
 
   return {
     scripts: rows.length,
     contributors: contributors.size,
     territories: territories.size,
-    updatedAt,
   }
 }

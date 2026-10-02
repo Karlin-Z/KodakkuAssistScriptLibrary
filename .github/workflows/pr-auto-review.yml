@@ -32,6 +32,12 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
+      # 审核脚本是零依赖的 Node 模块，不需要 npm install
+      - name: 配置 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
       - name: 审核 PR
         id: review
         env:
@@ -42,7 +48,7 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           # 用于读取已提交的 guid 映射表做查重（取基线分支当前状态）
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: python3 .github/scripts/pr_review.py
+        run: node .github/scripts/pr_review.mjs
 
       - name: 自动合并（squash）
         id: merge

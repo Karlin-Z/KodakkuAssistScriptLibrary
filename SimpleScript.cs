@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Numerics;
 using System.Reflection.Metadata;
 using System.Threading.Tasks;
@@ -55,6 +55,74 @@ namespace MyScriptNamespace
             First,
             Second
         }
+
+        /// <summary>
+        /// 时间轴范例，战斗中随事件同步推进
+        /// </summary>
+        [ScriptTimeline("时间轴范例")]
+        const string SampleTimeline = """
+            # ───────── 最小时间轴范例 ─────────
+            # 格式：<时间> <类型> <参数...>
+            #   时间   10.0 绝对秒 | +2.0 相对上一条
+            #   类型   info 提示 | sync 同步 | event 触发脚本 | jump 跳转
+            #   info   裸文本即正文；带参数用 text=、level=、duration=、tts=
+            #   sync   eventName 必填，其余键是事件条件，window/timeout 单位秒
+            #   event  参数会塞进事件属性，供 ScriptMethod 用 eventCondition 匹配
+            #   jump   targetTime 单位秒，写事件条件则为条件跳转
+            #   正文里的等号要写成 \=
+
+              0.0  info   时间轴开始
+              3.0  info   level=important duration=5 tts=true 死刑，注意减伤
+             +2.0  info   text=分散站位
+             10.0  sync   eventName=StartCasting ActionId=133 window=2.5 timeout=2.5
+             12.0  event  kind=adds
+             30.0  jump   targetTime=0
+            """;
+
+        /// <summary>
+        /// 简体中文翻译，同时作为其它语言的对照原文
+        /// </summary>
+        [ScriptTimelineI18n(ScriptTimelineLang.ChineseSimplified)]
+        static readonly Dictionary<string, string> SampleTimelineI18n = new()
+        {
+            ["时间轴开始"] = "时间轴开始",
+            ["死刑，注意减伤"] = "死刑，注意减伤",
+            ["分散站位"] = "分散站位",
+        };
+
+        [ScriptTimelineI18n(ScriptTimelineLang.ChineseTraditional)]
+        static readonly Dictionary<string, string> SampleTimelineI18n_ChineseTraditional = new()
+        {
+            ["时间轴开始"] = "時間軸開始",
+            ["死刑，注意减伤"] = "死刑，注意減傷",
+            ["分散站位"] = "分散站位",
+        };
+
+        [ScriptTimelineI18n(ScriptTimelineLang.English)]
+        static readonly Dictionary<string, string> SampleTimelineI18n_English = new()
+        {
+            ["时间轴开始"] = "Timeline start",
+            ["死刑，注意减伤"] = "Tank buster, use mitigation",
+            ["分散站位"] = "Spread out",
+        };
+
+        [ScriptTimelineI18n(ScriptTimelineLang.Japanese)]
+        static readonly Dictionary<string, string> SampleTimelineI18n_Japanese = new()
+        {
+            ["时间轴开始"] = "タイムライン開始",
+            ["死刑，注意减伤"] = "死刑、軽減を準備",
+            ["分散站位"] = "散開",
+        };
+
+        /// <summary>
+        /// 时间轴 event 行触发的脚本方法
+        /// </summary>
+        [ScriptMethod(name: "时间轴事件", eventType: EventTypeEnum.TimeLineEvent, eventCondition: ["kind:adds"])]
+        public void OnTimelineEvent(Event @event, ScriptAccessory accessory)
+        {
+            accessory.Method.TTS($"时间轴事件 {@event["kind"]}");
+        }
+
         /// <summary>
         /// This method is called at the start of each battle reset.
         /// If this method is not defined, the program will execute an empty method.

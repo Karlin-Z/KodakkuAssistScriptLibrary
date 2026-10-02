@@ -1,5 +1,193 @@
 [
   {
+    "Name": "无敌提示宏",
+    "Guid": "FCDCA220-DA96-48B5-909B-C1E336671D54",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/01-General/InvulnAlert.cs",
+    "Note": "自身无敌倒计时提示。",
+    "UpdateTime": "2026-09-14T14:32:43Z"
+  },
+  {
+    "Name": "泰坦歼灭战",
+    "Guid": "BC3B91DA-224A-4356-B7B3-75A8366A2C1C",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/02-ARealmReborn/TheNavel.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1046,
+      293
+    ]
+  },
+  {
+    "Name": "O10n",
+    "Guid": "9248BFE3-D4AE-46AA-9111-AEC2DACDE893",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/04-Stormblood/O10n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      799
+    ]
+  },
+  {
+    "Name": "亚历山大绝境战",
+    "Guid": "E047803D-38D5-45B4-AF48-71C0691CDCC9",
+    "Version": "0.0.2.9",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/05-Shadowbringers/TheEpicOfAlexander.cs",
+    "Note": "有问题来DC反馈。\n画图基于设置的小队职能进行绘制，请确保设置准确无误。\n/e KASCLEAR 清理残余画图",
+    "UpdateInfo": "有问题来DC反馈。\n更新水雷指路，默认三雷ST",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      887
+    ]
+  },
+  {
+    "Name": "巴尔巴莉希娅歼灭战",
+    "Guid": "776A7DFB-F8C3-4ECC-BFB7-3631D083A117",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/StormsCrown.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1071
+    ]
+  },
+  {
+    "Name": "间歇灵泉哈姆岛",
+    "Guid": "554C2F0D-3E58-14B1-237A-2CA662AC229E",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheAetherfont.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1126
+    ]
+  },
+  {
+    "Name": "终结之战",
+    "Guid": "2BEBDA4A-DA6A-4B54-B9B8-533F34B3A2EB",
+    "Version": "0.0.0.2",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheFinalDay.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      997
+    ]
+  },
+  {
+    "Name": "阿修罗歼灭战",
+    "Guid": "0F38EA83-3D3A-AF4E-8908-56655F76014E",
+    "Version": "0.0.0.1",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheGildedAraya.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1136
+    ]
+  },
+  {
+    "Name": "海德林歼灭战",
+    "Guid": "EB83FE40-4DDC-42C8-B248-CBFDF9D0E2C1",
+    "Version": "0.0.0.1",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/06-Endwalker/TheMothercrystal.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      995
+    ]
+  },
+  {
+    "Name": "忆中金曦亚历山德里亚",
+    "Guid": "243443E4-FC8E-3EA6-9A75-FD2A4B6990FF",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/Alexandria.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1199
+    ]
+  },
+  {
+    "Name": "M1n",
+    "Guid": "28EEE8DC-DA6A-3F91-0D0C-7AA1BFB49AB0",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M1n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1225
+    ]
+  },
+  {
+    "Name": "M2n",
+    "Guid": "4FD21978-B76C-4BF7-A3F5-D0490BB51915",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M2n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1227
+    ]
+  },
+  {
+    "Name": "M3n",
+    "Guid": "AA6A8D8A-4462-41A2-B500-90515DE6534A",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M3n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1229
+    ]
+  },
+  {
+    "Name": "M4n",
+    "Guid": "F4A95B34-AE13-40E4-9106-78D607BCFD57",
+    "Version": "0.0.0.4",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/M4n.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1231
+    ]
+  },
+  {
+    "Name": "荒野秘境仙人刺谷",
+    "Guid": "C6AAF3DF-64BA-15C2-41F8-D24F7F4656DD",
+    "Version": "0.0.0.5",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/TenderValley.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1203
+    ]
+  },
+  {
+    "Name": "噩梦乐园迷途鬼区",
+    "Guid": "32BC9D47-D623-507F-CDBF-E17EFEA73FA4",
+    "Version": "0.0.0.8",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/TheStrayboroughDeadwalk.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1204
+    ]
+  },
+  {
+    "Name": "艳翼蛇鸟歼灭战",
+    "Guid": "E9ABB865-498F-4C4F-8071-8A2E9F0589F6",
+    "Version": "0.0.0.3",
+    "Author": "Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Cyf5119/07-Dawntrail/WorqorLarDor.cs",
+    "UpdateTime": "2026-09-14T14:32:43Z",
+    "TerritoryIds": [
+      1195
+    ]
+  },
+  {
     "Name": "M1s绘图",
     "Guid": "8010d865-7d6d-4c23-92e0-f4b0120e18ac",
     "Version": "0.0.0.9",
@@ -130,10 +318,10 @@
     "Name": "PiPiScript",
     "Guid": "5ce7ebbd-b47e-d61f-3d94-5423e8e80753",
     "Version": "0.0.0.2",
-    "Author": "Karlin-Z",
+    "Author": "Karlin",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/PiPiScript.cs",
     "Note": "这是一个提示文本.\n他有多行显示.\n请在这里放置你的提示文本",
-    "UpdateTime": "2026-09-12T05:46:17Z"
+    "UpdateTime": "2026-09-18T12:49:28Z"
   },
   {
     "Name": "多变迷宫自动化",
@@ -185,10 +373,10 @@
     "Name": "EdenUltimate",
     "Guid": "a4e14eff-0aea-a4b6-d8c3-47644a3e9e9a",
     "Version": "0.0.0.11",
-    "Author": "Karlin-Z",
+    "Author": "Karlin",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E7%BB%9D%E4%BC%8A%E7%94%B8.cs",
     "Note": "绝伊甸先行版 P4结束\nP3地火站位和水分摊尚无\nP4白圈指示尚无",
-    "UpdateTime": "2026-09-12T05:46:17Z",
+    "UpdateTime": "2026-09-18T12:49:28Z",
     "TerritoryIds": [
       1238
     ]
@@ -214,6 +402,713 @@
     "UpdateTime": "2026-09-12T05:46:17Z",
     "TerritoryIds": [
       144
+    ]
+  },
+  {
+    "Name": "金碟-小雏鸟的营救者",
+    "Guid": "4359482a-b7a8-4eb1-9a42-ffa3c79d6b7b",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/00-Other/Cliffhanger.cs",
+    "Note": "v0.0.0.3:\n1. 支持经典版小雏鸟的营救者\n2. 炸弹爆炸范围和时间是精准的，请参考画图\n3. TODO: 另一版本小雏鸟的营救者（抽到就做）\n4. 金碟！！碟！！！！！\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      144
+    ]
+  },
+  {
+    "Name": "vv工具箱",
+    "Guid": "260323f1-9d7d-4fd6-9222-282eb1aa9bf5",
+    "Version": "0.0.3.1",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/00-Other/VVToolKit.cs",
+    "Note": "v0.0.3.1\n---------------------------------------------------------\n此工具箱已修改为dev辅助性工具，删除了之前的大部分功能，如无需要请删除\n1. /e vvguid 自动生成新的guid并复制到剪切板\n2. /e vvlist 列出附近最多10个玩家\n鸭门",
+    "UpdateInfo": "v0.0.3.1\n删除了更新提醒的网络报错提示，为版本更新提示加上了脚本名字和作者名字\n鸭门\n----------------------------------\nDeleted the network error message for update checking, added script name and author to update notification.\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z"
+  },
+  {
+    "Name": "行会令合集 [Guildhests]",
+    "Guid": "3797d75b-cf0b-4de8-ad06-71f343af697b",
+    "Version": "0.0.0.1",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/02-A-Realm-Reborn/Guildhests.cs",
+    "Note": "v0.0.0.1\n----- 请在使用前阅读注意事项 以及根据情况修改用户设置 -----\n1. 本脚本为全部行会令的合集，通过当前所在副本ID(CurrentTerritoryId)区分各行会令的机制。\n2. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n3. 标点开关以及本地开关在用户设置里可自行选择\n鸭门\n----------------------------------\n----- Please read the notes before use and adjust user settings as needed. -----\n1. This single script covers every guildhest; each encounter's mechanics are gated by the current territory ID (CurrentTerritoryId).\n2. If you need a draw or notice any issues, @ me on DC or DM me.\n3. The toggle for marking and local marking can be adjusted in the user settings.\n4. TTS not support English, you can turn off TTS in user settings.\nDuckmen.",
+    "UpdateInfo": "v0.0.0.1\n\n鸭门\n----------------------------------\n\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      190,
+      191,
+      192,
+      214,
+      215,
+      216,
+      219,
+      220,
+      221,
+      222,
+      223,
+      298,
+      299,
+      300
+    ]
+  },
+  {
+    "Name": "LV.28 名门府邸静语庄园",
+    "Guid": "964f1a0a-5b2a-4473-b41b-a170bc823f67",
+    "Version": "0.0.0.5",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/02-A-Realm-Reborn/Haukke-Manor.cs",
+    "Note": "v0.0.0.5:\n1. 绿色标记为需要捡的钥匙，红色代表不捡\n2. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n3. 如果想要鲶鱼精标记请确保你打开了ACT并且安装了鲶鱼精插件\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1040
+    ]
+  },
+  {
+    "Name": "LV.50 凛冽洞天披雪大冰壁 [Snowcloak]",
+    "Guid": "e64621a3-5ff4-40e2-9070-88e69191a1c0",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/02-A-Realm-Reborn/Snowcloak.cs",
+    "Note": "v0.0.0.3\n----- 请在使用前阅读注意事项 以及根据情况修改用户设置 -----\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门\n----------------------------------\n----- Please read the notes before use and adjust user settings as needed. -----\n1. If you need a draw or notice any issues, @ me on DC or DM me.\nDuckmen.",
+    "UpdateInfo": "v0.0.0.3\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1062
+    ]
+  },
+  {
+    "Name": "LV.60 亚历山大机神城 天动之章3",
+    "Guid": "c9446d8e-118d-ec98-fcbc-732213b0a265",
+    "Version": "0.0.0.6",
+    "Author": "Meva & Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/03-Heavensward/A11N.cs",
+    "Note": "v0.0.0.6:",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      582
+    ]
+  },
+  {
+    "Name": "LV.60 亚历山大机神城 天动之章4",
+    "Guid": "c77e794f-f3bc-37fc-810b-bb153ba399c1",
+    "Version": "0.0.0.6",
+    "Author": "Meva & Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/03-Heavensward/A12N.cs",
+    "Note": "v0.0.0.6:",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      583
+    ]
+  },
+  {
+    "Name": "LV.60 亚历山大机神城 天动之章1",
+    "Guid": "7cb80e0d-e693-6ca9-c46e-c96b0ec5d109",
+    "Version": "0.0.0.6",
+    "Author": "Meva & Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/03-Heavensward/A9N.cs",
+    "Note": "v0.0.0.6",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      580
+    ]
+  },
+  {
+    "Name": "LV.60 血战苍穹魔科学研究所",
+    "Guid": "dd08165c-b709-4100-a96e-65f2c7ae4f3b",
+    "Version": "0.0.0.8",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/03-Heavensward/the-Aetherochemical-Research-Facility.cs",
+    "Note": "v0.0.0.8:\n1. 现在支持文字横幅/TTS开关\n2. 以前的这几个脚本的底层扩展目前懒得重构（就能加啥随便加了）\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1110
+    ]
+  },
+  {
+    "Name": "LV.60 秘本宝库迦巴勒幻想图书馆 [The Great Gubal Library (Hard)]",
+    "Guid": "d376d381-8bd0-4a3b-9a87-d3e06e5afab8",
+    "Version": "0.0.0.2",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/03-Heavensward/the-Great-Gubal-Library-Hard.cs",
+    "Note": "v0.0.0.2\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. Boss1的击退感觉没有必要画所以没有画\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\n2. Boss 1 knockback felt unnecessary to draw, so I just skipped it.\nDuckmen",
+    "UpdateInfo": "v0.0.0.2\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      578
+    ]
+  },
+  {
+    "Name": "LV.73 水妖幻园多恩美格禁园",
+    "Guid": "d8fbc4be-b2c3-43a5-93f7-2901b40d0921",
+    "Version": "0.0.0.8",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/DohnMheg.cs",
+    "Note": "v0.0.0.8:\n1. 现在支持文字横幅/TTS开关\n2. 以前的这几个脚本的底层扩展目前懒得重构（就能加啥随便加了）\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      821
+    ]
+  },
+  {
+    "Name": "LV.80 伊甸希望乐园 共鸣之章3",
+    "Guid": "7732767d-bfb3-4c96-9719-962ba10cec08",
+    "Version": "0.0.0.2",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/Edens-Verse-Iconoclasm.cs",
+    "Note": "v0.0.0.2:\n1. 此脚本只用了一个arr回放进行测试，如果出现错画的问题，请dc@我并提供arr回放\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      904
+    ]
+  },
+  {
+    "Name": "LV.71 遇袭集落水滩村",
+    "Guid": "a407d364-b2bd-4e12-9332-70ca3829ece7",
+    "Version": "0.0.1.0",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/HolminsterSwitch.cs",
+    "Note": "v0.0.1.0:\n1. 现在支持文字横幅/TTS开关\n2. 以前的这几个脚本的底层扩展目前懒得重构（就能加啥随便加了）\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      837
+    ]
+  },
+  {
+    "Name": "LV.77 避暑离宫马利卡大井 [Malikahs Well]",
+    "Guid": "41547ef2-b54c-4296-9ca4-8e54992ea6fb",
+    "Version": "0.0.0.2",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/Malikah-s-Well.cs",
+    "Note": "v0.0.0.2\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\nDuckmen",
+    "UpdateInfo": "v0.0.0.2\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      836
+    ]
+  },
+  {
+    "Name": "LV.79 伪造天界格鲁格火山 [Mt. Gulg]",
+    "Guid": "e67816ed-08b7-4df6-857a-2b71e9426d1c",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/MtGulg.cs",
+    "Note": "v0.0.0.3\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\nDuckmen",
+    "UpdateInfo": "v0.0.0.3\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      822
+    ]
+  },
+  {
+    "Name": "LV.80 魔法宫殿宇宙宫",
+    "Guid": "b3a2febd-73ff-44a9-a897-22fa50c74ff3",
+    "Version": "0.0.0.4",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/the-Grand-Cosmos.cs",
+    "Note": "v0.0.0.4:\n1. 现在支持文字横幅/TTS开关\n2. 标点开关以及本地开关都在用户设置里面，可自行选择关闭或者开启（默认本地开启）\n3. 有生之年!可能会!添加新的扫帚紫圈的判定方式\n4. 有生之年!可能会!添加新的Boss2种子的判定方式\n5. Boss3标记物品水晶灯没标, 目标太大了都能看得见\n6. 支持副本点位指路，红线为引战范围\n7. 如果感觉指路点位不够的话请在dc频道说一下或者dc私聊我(24个点位总能够了吧（x）)\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      884
+    ]
+  },
+  {
+    "Name": "LV.75 文明古迹奇坦那神影洞",
+    "Guid": "50c922c1-1ecd-4750-8b55-24f19793408f",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/the-Qitana-Ravel.cs",
+    "Note": "v0.0.0.3:\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. 只用了单回放进行测试，不能保证绘图完全准确\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      823
+    ]
+  },
+  {
+    "Name": "LV.80 光之战士歼灭战 [the Seat of Sacrifice]",
+    "Guid": "864c6d7e-20bd-49b6-93ec-31b4d70e1afd",
+    "Version": "0.0.0.9",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/the-Seat-of-Sacrifice.cs",
+    "Note": "v0.0.0.9:\n1. 现已支持几乎所有机制播报及绘图\n2. 支持DR 自动动态演练开关（默认为打开状态）\n3. 目前光明剑不确定是否只有两个情况，如果有更多的情况没有画出来的话请带arr回放在dc向我反馈\n4. 现在支持文字横幅/TTS开关\n5. v0.0.0.3，删除自动动态演练开关 关闭后会offload的方法\n6. 更新光之剑出现在东西侧的情况\n7. v0.0.0.4, 可能解决了光之剑东西侧画反的问题（回放太少所以不清楚是否解决，如果还是画错请dc@我）\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      922
+    ]
+  },
+  {
+    "Name": "LV.90 最终幻想末世终迹 [the Dead Ends]",
+    "Guid": "850c08df-adad-43f7-8a2a-f8da31df4e84",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/06-EndWalker/the-Dead-Ends.cs",
+    "Note": "v0.0.0.3\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. Boss2击退距离因为缺乏实例所以不确定，如果有未使用防击退的arr可以给我发一份\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\n2. Boss 2 knockback distance is uncertain due to lack of examples.  \n   If you have ARR without anti-knockback used, please send it to me.\nDuckmen",
+    "UpdateInfo": "v0.0.0.3\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      973
+    ]
+  },
+  {
+    "Name": "LV.90 终结之战 [the Final Day]",
+    "Guid": "eee45586-c0cc-4f43-9af1-6f0f4427cbf7",
+    "Version": "0.0.0.2",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/06-EndWalker/the-Final-Day.cs",
+    "Note": "v0.0.0.2\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\nDuckmen",
+    "UpdateInfo": "v0.0.0.2\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      997
+    ]
+  },
+  {
+    "Name": "LV.90 终极之战(解限版)",
+    "Guid": "100df6f8-d8ce-44f7-9fb0-431eca0f2825",
+    "Version": "0.0.0.7",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/06-EndWalker/the-Minstrels-Ballad-Endsingers-Aria.cs",
+    "Note": "v0.0.0.7:\n1. 现在支持文字横幅/TTS开关\n2. 以前的这几个脚本的底层扩展目前懒得重构（就能加啥随便加了）\n鸭门。 ",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      998
+    ]
+  },
+  {
+    "Name": "LV.81 异形楼阁佐特塔",
+    "Guid": "98a97134-f87b-4386-aad9-2a99e81794ab",
+    "Version": "0.0.0.5",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/06-EndWalker/the-Tower-of-Zot.cs",
+    "Note": "v0.0.0.5:\n1. 现在支持文字横幅/TTS开关\n2. 标点开关以及本地开关都在用户设置里面，可自行选择关闭或者开启（默认本地开启）\n3. Boss1击杀后会生成门指路，绿圈显示为击杀小怪后会打开的门（防止晕头转向）\n4. Boss2标记目前有bug删除不掉，但是正常dps的话到那里boss也快死了（不正常dps一个攻击1的标点也不影响），所以有缘会修\n5. 强烈建议默认本地标点，因为是秒标记(不拟人)\n6. 建议关闭cactbot播报功能以防止重复播报\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      952
+    ]
+  },
+  {
+    "Name": "加加财富天坑",
+    "Guid": "64620549-e269-49c0-b0ae-76edec024864",
+    "Version": "0.0.0.4",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Cenote-Ja-Ja-Gural.cs",
+    "Note": "v0.0.0.4:\n1. 加加财富天坑只根据自己下底的arr进行绘制，没有后面天箭绘画的情况\n2. 如果你有此方面的素材可以dc私信提供给我，我会加入到绘制里\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1209
+    ]
+  },
+  {
+    "Name": "LV.99 佐拉加歼灭战",
+    "Guid": "7a6d317c-b176-4e94-9fbc-3bc833be1338",
+    "Version": "0.0.1.0",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Everkeep.cs",
+    "Note": "v0.0.1.0:\n1. 现在支持文字横幅/TTS开关\n鸭门。\n2. 现已支持所有利刃冲情况，如果依然遇到画错/漏画的情况，请dc带回放私信我（十分感谢）",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1200
+    ]
+  },
+  {
+    "Name": "LV.100 朱雀幻巧战",
+    "Guid": "60468283-702c-4ddb-95db-fd81409d5630",
+    "Version": "0.0.0.8",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Hells-Kier-Unreal.cs",
+    "Note": "v0.0.0.8:\n1. 本脚本使用攻略为菓子攻略，请在打本之前调整好! 可达鸭的小队排序!!（很重要，影响指路和机制播报）\n2. 如果懒得调也不想看需要小队位置判定的指路，可以在用户设置里面关闭指路开关\n3. 用户设置里面新加入场景标点设置(开局放置ABCD标点)(需要ACT鲶鱼精), 可能在未来弄一个不需要鲶鱼精的方法\n4. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1272
+    ]
+  },
+  {
+    "Name": "LV.100 遗忘行路雾之迹 [Mistwake]",
+    "Guid": "b7d5e223-17b8-43bf-932f-dceddf10ba1a",
+    "Version": "0.0.0.5",
+    "Author": "Tetora & Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Mistwake.cs",
+    "Note": "v0.0.0.5\n----- 请在使用前阅读注意事项 以及根据情况修改用户设置 -----\n----- 请支持南雲鉄虎喵！ 谢谢喵！ -----\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. Boss1 的 石头后范围可能不是特别精准, 请在战斗中视情况站位\n鸭门\n----------------------------------\n----- Please read the notes before use and adjust user settings as needed. -----\n----- Please support Tetora! Meow! Thank you! Meow! -----\n1. If you need a draw or notice any issues, @ me on DC or DM me.\n2. The safe zone behind the rock during Boss1 not be perfectly precise. Please adjust your position as needed during the duty.\nDuckmen.",
+    "UpdateInfo": "v0.0.0.5\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1314
+    ]
+  },
+  {
+    "Name": "LV.100 桑多利亚：第二巡行 [San d Oria The Second Walk]",
+    "Guid": "26a812eb-b8e2-4f31-8568-affe775bd4c6",
+    "Version": "0.0.0.5",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/San-d-Oria-The-Second-Walk.cs",
+    "Note": "v0.0.0.5\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. Boss1可能会遇到双手直线时间偏长的问题（懒得改了影响不是很大）\n3. Boss3并没有对坦克职业的击退死刑执行自动防击退\n4. 初版Boss2的反射激光和Boss4的复制可能会出现绘制问题（画错，不画）, 请发现后携带arr在dc反馈\n5. Boss2的地板绘制会有一点点小问题，请无视\n6. 游戏崩溃了请务必在频道说，如果没有arr请跟我说一下大概机制和时间并提供[dalamud.log]\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\n2. Boss 1 may have an issue where the double-arm Rect AOE lasts a bit too long.  \n   (Not a big deal so I’m too lazy to fix it.)\n3. Boss 3 does not auto-use anti-knockback for tankbuster knockbacks. \n4. In the initial version, Boss 2’s Energy Ray (reflect laser) and Boss 4’s Duplicate may have drawing issues (wrong/missing).  \n   If you encounter this, please provide an ARR for feedback on DC.\n5. Boss 2’s floor drawing has a small issue — just ignore it.\n6. If the game crashes, please report it in the dc channel.  \n   If no ARR is available, let me know roughly which mechanic and the time it happened, and provide your [dalamud.log].\nDuckmen",
+    "UpdateInfo": "v0.0.0.5\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1304
+    ]
+  },
+  {
+    "Name": "LV.100 白虎幻巧战",
+    "Guid": "29193d9d-a2c5-4a0d-875b-943a06790b95",
+    "Version": "0.0.0.5",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/The-Jade-Stoa-Unreal.cs",
+    "Note": "v0.0.0.5:\n1. 本脚本使用攻略为子言攻略，请在打本之前调整好!可达鸭的小队排序!（很重要，影响指路和机制播报）\n2. 如果懒得调也不想看需要小队位置判定的指路，可以在用户设置里面关闭指路开关\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1239
+    ]
+  },
+  {
+    "Name": "LV.100 护锁刃龙狩猎战 [The Windward Wilds]",
+    "Guid": "89c903db-488d-442d-9538-620460ef3966",
+    "Version": "0.0.0.7",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/TheWindwardWilds.cs",
+    "Note": "v0.0.0.7\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. 绘制结束后精简(删除)了一些TTS，如有哪个地方需要可以反馈给我添加回来\n3. Boss模型和特效缩放比例设置请在用户设置中修改，1为默认值\n鸭门\n----------------------------------\n1. If you need a draw or notice any issues, @ me on DC or DM me.\n2. Cleaned up a few TTS after the drawings. If you need any of them, let me know and I’ll restore them.\n3. Boss Model Scale and VFX Scale can be adjusted in User Settings, 1 is the Game default value.\nDuckmen.",
+    "UpdateInfo": "v0.0.0.7\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1300
+    ]
+  },
+  {
+    "Name": "LV.100 护锁刃龙上位狩猎战 [The Windward Wilds (Extreme)]",
+    "Guid": "b4a3871d-2499-4152-aaa2-a911ee1bbce2",
+    "Version": "0.0.1.0",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/TheWindwardWildsExtreme.cs",
+    "Note": "v0.0.1.0\n----- 感谢@Usami提供的惰性水晶绘制方法 -----\n----- 请在使用前阅读注意事项 以及根据情况修改用户设置 -----\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. 播报左右侧均是以 #面对# Boss为准, 播报的并不是基于boss本体的左右，请注意辨别\n3. 本脚本使用攻略为game8(子言)\n4. 如果想要场景标记请确保你打开了ACT并且安装了鲶鱼精邮差(PostNamazu)插件\n5. 大部分机制处理都依赖于小队成员顺序，请务必确保小队成员顺序正确\n6. 绘制结束后精简(删除)了一些TTS，如有哪个地方需要可以反馈给我添加回来\n7. 分摊机制如果奶妈倒了的话可能会出现一些妙妙bug\n8. 网卡可能会小概率出现一些妙妙bug\n9. 龙闪炮处会有推荐指路和分摊指路，推荐指路为绿色，分摊指路为紫色，请注意区分\n10. Boss模型和特效缩放比例设置请在用户设置中修改，1为默认值\n11. 可以在用户设置中的职能设置来手动设置自己的职能，默认defalutRole为使用可达鸭职能顺序\n鸭门\n----------------------------------\n----- Thanks to @Usami for the distance-based Cracked Crystal drawing method.-----\n----- Please read the notes before use and adjust user settings as needed. -----\n1. If you need a draw or notice any issues, @ me on DC or DM me.\n2. Left/Right notifies are **boss-relative** (based on you facing the boss), \n   not the boss model’s own left/right. Please keep this in mind.\n3. This script follows the Game8 & 子言 guide.\n4. If you want WayMarkers, make sure ACT is running and the PostNamazu plugin is installed.\n5. Most drawing depends on **party list order** — please make sure the party order is correct.\n6. Cleaned up a few TTS after the drawings. If you need any of them, let me know and I’ll restore them.\n7. Stack drawings may behave oddly if a healer goes down.\n8. There may be some odd bugs with network lag.\n9. Wyvern’s Weal now has both recommend and stack guide arrow.\n   The recommended guide arrow is shown in green, and the stack guide arrow is shown in purple.\n10. Boss Model Scale and VFX Scale can be adjusted in User Settings, 1 is the Game default value.\n11. You can now manually set your Role in the User Settings → Role Settings.\n    `默认defalutRole` follows KodakkuAssist’s Role order.\nDuckmen.",
+    "UpdateInfo": "v0.0.1.0\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1306
+    ]
+  },
+  {
+    "Name": "巡梦金库 [Vault Oneiron]",
+    "Guid": "027ed2ae-4162-4d1e-a77d-a74d9441b065",
+    "Version": "0.0.0.3",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Vault-Oneiron.cs",
+    "Note": "v0.0.0.3\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\nDuckmen",
+    "UpdateInfo": "v0.0.0.3\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1279
+    ]
+  },
+  {
+    "Name": "LV.100 废弃据点玉韦亚瓦塔实验站",
+    "Guid": "992e47a8-17d0-4379-891b-0762c0509257",
+    "Version": "0.0.2.2",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/Yuweyawata-Field-Station.cs",
+    "Note": "v0.0.2.2:\n1. 如果有漏画（Boss出现在南侧核爆）错画的情况，请在dc@我，并附上arr文件\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1242
+    ]
+  },
+  {
+    "Name": "LV.100 军工要地克吕提俄斯魔导工厂 [the Clyteum]",
+    "Guid": "5f365ada-2833-4164-92b3-8d11b7275b80",
+    "Version": "0.0.0.6",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/the-Clyteum.cs",
+    "Note": "v0.0.0.6\n----- 请在使用前阅读注意事项 以及根据情况修改用户设置 -----\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. 小怪部分和一些细节部分后续版本更新\n鸭门\n----------------------------------\n----- Please read the notes before use and adjust user settings as needed. -----\n1. If you need a draw or notice any issues, @ me on DC or DM me.\n2. English version will be added in the future update, I'll update it when XIV strings comp is updated.\n3. Mobs and some details will be added in future updates.\nDuckmen.",
+    "UpdateInfo": "v0.0.0.6\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1345
+    ]
+  },
+  {
+    "Name": "LV.100 永久幽界中央终端 [the Meso Terminal]",
+    "Guid": "c74e8153-46e1-4a18-97bd-250463781ed2",
+    "Version": "0.0.0.5",
+    "Author": "Veever",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/the-Meso-Terminal.cs",
+    "Note": "v0.0.0.5\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. Boss3 NPC聚集在一起的圆圈绘画如果掉线可能会导致不画\n鸭门\n------------------------------\n1. If you need a draw for a mechanic or notice any issues, @ me on DC or DM me.\n2. Boss 3: The circle draw for Bombardment may fail to draw if you disconnect\nDuckmen",
+    "UpdateInfo": "v0.0.0.5\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1292
+    ]
+  },
+  {
+    "Name": "LV.100 王城古迹永护塔底",
+    "Guid": "9b381347-ddbf-4f52-98a9-a63d6e0d69bd",
+    "Version": "0.0.0.5",
+    "Author": "Veever & Cyf5119",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/the-Underkeep.cs",
+    "Note": "v0.0.0.5:\n1. 持续更新中\n2. Boss3的十字炸弹画了但是没画完，先不开放使用\n3. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n鸭门。",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      1266
+    ]
+  },
+  {
+    "Name": "LV.100 青龙诗魂-幻巧战 [the Wreath of Snakes Ex-Unreal]",
+    "Guid": "3a915832-971d-4c27-b802-407a1e30ae53",
+    "Version": "0.0.0.2",
+    "Author": "Veever & Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/07-DawnTrail/the-Wreath-of-Snakes-Unreal.cs",
+    "Note": "v0.0.0.2\n1. 如果需要某个机制的绘画或者哪里出了问题请在dc@我或者私信我\n2. 刀禁咒分摊强制绑定画双奶（双奶死了的话就听天由命了）\n3. 塔站位绘图按照如下方式\n      MT / D1    ST / D2\n      H1 / D3    H2 / D4\n4. 极神机制还未彻底完成（缺少技能id（其实是懒得去，有朝一日会加的））\n5. 鲶鱼精标点为基础北东南西ABCD标点\n鸭门\n----------------------------------\n1. If you need a draw or notice any issues, @ me on DC or DM me.\n2. For the Forbidden Arts Stack, both healers are hard-locked draw\n   (if both healers die, it’s GG / pray to Hydaelyn xd).\n3. Tower positions are as follows:\n      MT / D1    ST / D2\n      H1 / D3    H2 / D4\n4. EX trial draw are not fully implemented yet (missing skill IDs — honestly just lazy, \n   will add them one day).\n5. PostNamazu markers default to standard N/E/S/W (ABCD).\nDuckmen.",
+    "UpdateInfo": "v0.0.0.2\n修复了TTS\n鸭门\n----------------------------------\nFixed TTS\nDuckmen.",
+    "UpdateTime": "2026-09-13T11:35:15Z",
+    "TerritoryIds": [
+      825,
+      1302
+    ]
+  },
+  {
+    "Name": "UCOB [巴哈姆特绝境战]",
+    "Guid": "884e415a-1210-44cc-bdff-8fab6878e87d",
+    "Version": "0.0.2.3",
+    "Author": "Joshua & Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/04-StormBlood/UCOB.cs",
+    "Note": "基于@Joshua的巴哈初版程序改写扩充，\n感谢合作者@KnightRider，@Meva。\n请先按需求检查并设置“用户设置”栏目。\n鸭门。",
+    "UpdateInfo": "1. 现在若引导俯冲的不是自己，将不会再进行指路",
+    "UpdateTime": "2026-09-18T12:49:28Z",
+    "TerritoryIds": [
+      733
+    ]
+  },
+  {
+    "Name": "绝巴哈姆特 Reborn",
+    "Guid": "e2e37136-72a2-46b0-abc7-ade17da161b7",
+    "Version": "0.0.0.4",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/04-StormBlood/UcobReborn/UcobReborn.cs",
+    "Note": "0.0.0.4\n基于 UCOB [巴哈姆特绝境战] 脚本的重置版。\n加了很多很多东西。\n原脚本作者：Joshua，Meva，KnightRider，Usami",
+    "UpdateInfo": "0.0.0.4\n1. 移除了 P3F_踩塔判定倒计时。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      733
+    ]
+  },
+  {
+    "Name": "ASS [异闻希拉狄哈水道]",
+    "Guid": "bdd73dbd-2a93-4232-9324-0c9093d4a646",
+    "Version": "0.0.1.5",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/ASS.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目，\n并在/KTeam中设置 T>H>近>远。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1075,
+      1076
+    ]
+  },
+  {
+    "Name": "Lv87 [创造环境极北造物院]",
+    "Guid": "8d4e4a9c-b144-4ec2-82cd-46b38867e4e6",
+    "Version": "0.0.0.2",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Lv87_KtisisHyperboreia.cs",
+    "Note": "仅老二老三，别吃dot了别吃dot了！",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      974
+    ]
+  },
+  {
+    "Name": "Rubicante [卢比坎特歼灭战]",
+    "Guid": "dd6bb7eb-c051-4406-8ec3-ff3523c753ee",
+    "Version": "0.0.0.2",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Rubicante.cs",
+    "Note": "v0.0.0.2:\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1095
+    ]
+  },
+  {
+    "Name": "Rubicante-Ex [卢比坎特歼殛战]",
+    "Guid": "a5f70ab7-b79a-468c-9ffe-3c7e5091d71d",
+    "Version": "0.0.0.4",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/RubicanteEx.cs",
+    "Note": "v0.0.0.4:\n很遗憾，大转盘必须Imgui。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1096
+    ]
+  },
+  {
+    "Name": "Zodiark [佐迪亚克歼灭战]",
+    "Guid": "ed3f32fe-fc12-4485-baa4-bec6c357e70b",
+    "Version": "0.0.0.3",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/Zodiark.cs",
+    "Note": "v0.0.0.3:\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      992
+    ]
+  },
+  {
+    "Name": "Zodiark-Ex [佐迪亚克暝暗歼灭战]",
+    "Guid": "e24a0c8b-5c41-4e58-87c3-355f1f925986",
+    "Version": "0.0.0.6",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/ZodiarkEx.cs",
+    "Note": "v0.0.0.6:\n鸭门。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      993
+    ]
+  },
+  {
+    "Name": "P12S [零式万魔殿 荒天之狱4]",
+    "Guid": "563bd710-59b8-46de-bbac-f1527d7c0803",
+    "Version": "0.0.0.11",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p12s.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目。\n门神到超链后对话，本体到黑白塔。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1154
+    ]
+  },
+  {
+    "Name": "P4S [零式万魔殿 边境之狱4]",
+    "Guid": "de9e31e6-d040-48e3-bf0b-aa4e2643f79d",
+    "Version": "0.0.0.5",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p4s.cs",
+    "Note": "请先按需求检查并设置“用户设置”栏目。\n“逃课”即为黑糖荔枝攻略演示。\n门神仅线毒提示，本体到二运。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1009
+    ]
+  },
+  {
+    "Name": "P8S [零式万魔殿 炼净之狱4]",
+    "Guid": "97df6974-c726-4a00-9016-293c184adf5c",
+    "Version": "0.0.0.7",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/p8s.cs",
+    "Note": "v0.0.0.7\n一车设置场中H2，正右ST。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1088
+    ]
+  },
+  {
+    "Name": "DSR_Patch [幻想龙诗绝境战 补丁]",
+    "Guid": "cc6fb606-ff7b-4739-81aa-4861b204ab1e",
+    "Version": "0.0.0.16",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/DSR/DSR_Patch.cs",
+    "Note": "基于K佬绝龙诗绘图的个人向补充，\n请先按需求检查并设置“用户设置”栏目。\n在忆罪宫输入\"/e =Exaflare\"可以测试地火特殊跑法。\n鸭门。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      968,
+      1112
+    ]
+  },
+  {
+    "Name": "绝欧精装 Reborn",
+    "Guid": "6272e52b-5500-4ff0-8634-dd15f2e3b25e",
+    "Version": "0.0.0.18",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/06-EndWalker/TopReborn/TopReborn.cs",
+    "Note": "v0.0.0.18\n修改自Karlin/Meva的脚本，\n谨慎使用特殊功能。",
+    "UpdateInfo": "0.0.0.18\n1. 适配 P5 二运在女人击退踩塔时标点的指挥逻辑，以解决 P5 二运后半不指路的问题。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1122
+    ]
+  },
+  {
+    "Name": "FRU_Patch [光暗未来绝境战 补丁]",
+    "Guid": "3076a62b-127e-468e-96d3-4f1d559857ec",
+    "Version": "0.0.0.12",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/FRU/FRU_Patch.cs",
+    "Note": "v0.0.0.12\n指挥模式对P3二运有效。\n若开启指挥模式，将执行近战优化标点。（固定MT左与D1右，并非固定MT左与ST右！）\n不论MT或ST引导，双T都会收到引导方向提示。\n若发生问题请携ARR反馈。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1238
+    ]
+  },
+  {
+    "Name": "M6S [零式阿卡狄亚 中量级2]",
+    "Guid": "4f5decb5-4a78-4e83-96c8-09678761a751",
+    "Version": "0.0.0.15",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/M6S/M6S.cs",
+    "Note": "v0.0.0.15\n请先于用户设置中调整整体策略（Game8/CnServer）。\n待完善。",
+    "UpdateInfo": "1. 适配鸭鸭0.5.x.x",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1259
+    ]
+  },
+  {
+    "Name": "NecronEx [永恒之暗悲惶歼灭战]",
+    "Guid": "1829f7d6-9e64-4cf7-9be4-e5d8a2e03d21",
+    "Version": "0.0.0.8",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/Necron/NecronEx.cs",
+    "Note": "0.0.0.8\n初版，鸭门。",
+    "UpdateInfo": "0.0.0.8\n1. 上传官方库。",
+    "UpdateTime": "2026-09-21T01:00:02Z",
+    "TerritoryIds": [
+      1296
+    ]
+  },
+  {
+    "Name": "QueenEternalEx [永恒女王忆想歼灭战]",
+    "Guid": "45fff289-e23d-41ab-9039-71cd310668e4",
+    "Version": "0.0.0.9",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/QueenEternal/QueenEternalEx.cs",
+    "Note": "绝对君权为正攻，若逃课请忽略核爆远离指路箭头。\n针对土阶段涉及优先级的踩塔判断，可以开启用户设置中“土阶段四人塔智能优先级判断”。\n若不使用此功能，请确认小队列表排序正确（特别关注D1/D2），避免踩塔指路错误。\n鸭门。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1243
+    ]
+  },
+  {
+    "Name": "绝妖星乱舞_P3",
+    "Guid": "c902dd56-629e-4033-a77f-fb23b8d94745",
+    "Version": "0.0.0.41",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/UDM/UDM_P3.cs",
+    "Note": "0.0.0.41\n二运黑洞\n- 含指路与指挥模式，需在用户设置开启，副本内使用 `/e kdyhd` 可测试标点优先级。\n- * 黑洞指路依赖标点，黑洞出现前需完成整个标点流程。\n- 共有五种优先级配置，其中：\n- * HDT(\"43765812\")：采用 H2 > H1 > D3 > D2 > D1 > D4 > MT > ST\n- * HDT三麻取反(\"437658120\")：基于 HDT，三麻优先级取反（ST > MT > ... > H2)\n- * THD(\"12345678\")：采用 MT > ST > H1 > H2 > D1 > D2 > D3 > D4\n- * 若选择自定义，可从左到右细分各职能标点顺序，支持8位或9位输入。\n- * 前八位由\"1~8\"组成，第九位输入\"0\"代表三麻取反，输入错误则回退到“HDT三麻取反”。\n\n二运黑洞指挥策略 - 美式T2泥3\n- 根据职能与 Buff 固定标点，其本质为 DTH，但固定T摇2。\n- 无Buff D：攻/锁/禁1；无Buff T/H：攻/锁/禁2；泥土 H/D：攻/锁3\n- 可避免T摇攻1禁1满地乱爬、摇攻3卡奥斯离开场中读半场刀、摇锁3白洞前清血的毒点。\n\n特殊方法\n- 屏蔽艾克斯迪司释放钢铁暴雷时的连线\n- 巨大凯夫卡释放上桌技能时透明化\n- 治疗与输出职业在决战 Buff 期间，无法选中不能造成伤害的 Boss",
+    "UpdateInfo": "0.0.0.41\n1. 增加黑洞指示线颜色控制。",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "Shinryu-Ur [神龙幻巧战]",
+    "Guid": "fcf45bf5-bb72-42f8-b918-4c4b779fb70c",
+    "Version": "0.0.0.3",
+    "Author": "Usami",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/UnrealShinryu/UnrealShinryu.cs",
+    "Note": "0.0.0.3\n初版",
+    "UpdateInfo": "0.0.0.3\n1. 增加 P1 超新星站水坑安全区提示\n2. 增加 P1 螺旋冲锋危险区提示（怎么压不掉？）",
+    "UpdateTime": "2026-09-17T01:45:20Z",
+    "TerritoryIds": [
+      730,
+      1372
     ]
   }
 ]

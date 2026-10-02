@@ -19,7 +19,7 @@ namespace MyScriptNamespace;
 ///     Classes with the same GUID will be considered the same trigger. Please ensure your GUID is unique and does not
 ///     conflict with others.
 /// </summary>
-[ScriptType(name: "PiPiScript", guid: "5ce7ebbd-b47e-d61f-3d94-5423e8e80753", version: "0.0.0.2", note: noteStr)]
+[ScriptType(name: "PiPiScript", guid: "5ce7ebbd-b47e-d61f-3d94-5423e8e80753", version: "0.0.0.2", author: "Karlin", note: noteStr)]
 public class PiPiScript
 {
     private const string noteStr =

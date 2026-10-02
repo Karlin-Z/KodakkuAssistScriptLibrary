@@ -1,40 +1,52 @@
 ﻿using Dalamud.Game.ClientState.Objects.Types;
-using System;
-using System.Linq;
-using System.Numerics;
-using Newtonsoft.Json;
 using Dalamud.Utility.Numerics;
-using KodakkuAssist.Script;
-using KodakkuAssist.Module.GameEvent;
+using FFXIVClientStructs;
+using FFXIVClientStructs.FFXIV.Client.UI;
 using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.Draw.Manager;
-using System.Reflection.Metadata;
-using System.Net;
-using System.Threading.Tasks;
-using System.Runtime.Intrinsics.Arm;
+using KodakkuAssist.Module.GameEvent;
+using KodakkuAssist.Script;
+using Lumina.Data.Structs;
+using Newtonsoft.Json;
+using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using System.Windows;
-using FFXIVClientStructs;
-using System;
+using System.Linq;
+using System.Net;
+using System.Numerics;
+using System.Reflection.Metadata;
 using System.Runtime.InteropServices;
+using System.Runtime.Intrinsics.Arm;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Xml.Linq;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using Lumina.Data.Structs;
 
 namespace Veever.Shadowbringers.Edens_Verse_Iconoclasm;
 //^(?!.*((武僧|机工士|龙骑士|学者|舞者|蝰蛇剑士|暗黑骑士|(朝日|夕月)小仙女|炽天使|白魔法师|战士|骑士|召唤师|宝石兽|亚灵神巴哈姆特|亚灵神不死鸟|迦楼罗之灵|泰坦之灵|伊弗利特之灵|后式自走人偶)\] (Used|Cast|Cancel|Add))).*$
 
 [ScriptType(name: "LV.80 伊甸希望乐园 共鸣之章3", territorys: [904], guid: "7732767d-bfb3-4c96-9719-962ba10cec08",
-    version: "0.0.0.2", author: "Veever", note: noteStr)]
+    version: "0.0.0.3", author: "Veever", note: noteStr, updateInfo: UpdateInfo)]
 
 public class Edens_Verse_Iconoclasm
 {
     const string noteStr =
     """
-    v0.0.0.2:
-    1. 此脚本只用了一个arr回放进行测试，如果出现错画的问题，请dc@我并提供arr回放
+    v0.0.0.3:
+    1. 此脚本只用了2个arr回放进行测试，如果出现错画的问题，请dc@我并提供arr回放
     鸭门。
+    """;
+
+    const string UpdateInfo =
+    $"""
+    v0.0.0.3
+    1. 修复了传送门的一些绘制错误问题
+    2. 修复了光暗buff不绘制的问题
+    3. 新增支持时间轴
+    鸭门
+    ----------------------------------
+
+    Duckmen.
     """;
 
     [UserSetting("文字横幅提示开关")]
@@ -49,6 +61,104 @@ public class Edens_Verse_Iconoclasm
     public int LightsCourseCount;
     public int StackCount;
 
+    #region TimeLine
+    [ScriptTimeline("T1")]
+    const string T1Timeline = """
+            11.145 info text="StartCasting 虚无波动" duration=0
+            22.343 info text="StartCasting 暗光钉" duration=0
+            37.603 info text="StartCasting 波状号令" duration=0
+            44.807 info text="StartCasting 白光奔流" duration=0
+            47.833 info text="StartCasting 白光奔流" duration=0
+            68.017 info text="StartCasting 白光奔流" duration=0
+            68.017 info text="StartCasting 白光奔流" duration=0
+            71.099 info text="StartCasting 白光奔流" duration=0
+            71.099 info text="StartCasting 白光奔流" duration=0
+            100.217 info text="StartCasting 白光奔流" duration=0
+            100.217 info text="StartCasting 白光奔流" duration=0
+            103.279 info text="StartCasting 白光奔流" duration=0
+            103.279 info text="StartCasting 白光奔流" duration=0
+            124.139 info text="StartCasting 强制传送" duration=0
+            141.253 info text="StartCasting 薄暮机动" duration=0
+            144.315 info text="StartCasting 黑暗之剑" duration=0
+            148.383 info text="StartCasting 白光之锤" duration=0
+            156.395 info text="StartCasting 虚无波动" duration=0
+            163.009 info text="StartCasting 暗光钉" duration=0
+            174.137 info text="StartCasting 属性变动" duration=0
+            184.287 info text="StartCasting 夜袭号令" duration=0
+            191.547 info text="StartCasting 黑暗奔流" duration=0
+            191.547 info text="StartCasting 白光奔流" duration=0
+            203.583 info text="StartCasting 黑暗奔流" duration=0
+            203.583 info text="StartCasting 白光奔流" duration=0
+            210.661 info text="StartCasting 黑暗奔流" duration=0
+            210.661 info text="StartCasting 白光奔流" duration=0
+            236.215 info text="StartCasting 强制传送" duration=2.7
+            243.157 info text="StartCasting 攻击机动" duration=0
+            261.855 info text="StartCasting 白光之矢" duration=0
+            264.993 info text="StartCasting 白光之矢" duration=0
+            278.993 info text="StartCasting 虚无泛滥" duration=6.7
+            296.499 info text="StartCasting 属性变动" duration=0
+            308.079 info text="StartCasting 夜袭号令" duration=0
+            315.867 info text="StartCasting 黑暗奔流" duration=0
+            315.867 info text="StartCasting 白光奔流" duration=0
+            """;
+
+    [ScriptTimelineI18n(ScriptTimelineLang.ChineseSimplified)]
+    static readonly Dictionary<string, string> T1I18n = new()
+    {
+        ["StartCasting 夜袭号令"] = "StartCasting 夜袭号令",
+        ["StartCasting 属性变动"] = "StartCasting 属性变动",
+        ["StartCasting 强制传送"] = "StartCasting 强制传送",
+        ["StartCasting 攻击机动"] = "StartCasting 攻击机动",
+        ["StartCasting 暗光钉"] = "StartCasting 暗光钉",
+        ["StartCasting 波状号令"] = "StartCasting 波状号令",
+        ["StartCasting 白光之矢"] = "StartCasting 白光之矢",
+        ["StartCasting 白光之锤"] = "StartCasting 白光之锤",
+        ["StartCasting 白光奔流"] = "StartCasting 白光奔流",
+        ["StartCasting 薄暮机动"] = "StartCasting 薄暮机动",
+        ["StartCasting 虚无泛滥"] = "StartCasting 虚无泛滥",
+        ["StartCasting 虚无波动"] = "StartCasting 虚无波动",
+        ["StartCasting 黑暗之剑"] = "StartCasting 黑暗之剑",
+        ["StartCasting 黑暗奔流"] = "StartCasting 黑暗奔流",
+    };
+
+    [ScriptTimelineI18n(ScriptTimelineLang.ChineseTraditional)]
+    static readonly Dictionary<string, string> T1I18n_ChineseTraditional = new()
+    {
+        ["StartCasting 夜袭号令"] = "StartCasting 夜袭号令",
+        ["StartCasting 属性变动"] = "StartCasting 属性变动",
+        ["StartCasting 强制传送"] = "StartCasting 强制传送",
+        ["StartCasting 攻击机动"] = "StartCasting 攻击机动",
+        ["StartCasting 暗光钉"] = "StartCasting 暗光钉",
+        ["StartCasting 波状号令"] = "StartCasting 波状号令",
+        ["StartCasting 白光之矢"] = "StartCasting 白光之矢",
+        ["StartCasting 白光之锤"] = "StartCasting 白光之锤",
+        ["StartCasting 白光奔流"] = "StartCasting 白光奔流",
+        ["StartCasting 薄暮机动"] = "StartCasting 薄暮机动",
+        ["StartCasting 虚无泛滥"] = "StartCasting 虚无泛滥",
+        ["StartCasting 虚无波动"] = "StartCasting 虚无波动",
+        ["StartCasting 黑暗之剑"] = "StartCasting 黑暗之剑",
+        ["StartCasting 黑暗奔流"] = "StartCasting 黑暗奔流",
+    };
+
+    [ScriptTimelineI18n(ScriptTimelineLang.Japanese)]
+    static readonly Dictionary<string, string> T1I18n_Japanese = new()
+    {
+        ["StartCasting 夜袭号令"] = "StartCasting 夜袭号令",
+        ["StartCasting 属性变动"] = "StartCasting 属性变动",
+        ["StartCasting 强制传送"] = "StartCasting 强制传送",
+        ["StartCasting 攻击机动"] = "StartCasting 攻击机动",
+        ["StartCasting 暗光钉"] = "StartCasting 暗光钉",
+        ["StartCasting 波状号令"] = "StartCasting 波状号令",
+        ["StartCasting 白光之矢"] = "StartCasting 白光之矢",
+        ["StartCasting 白光之锤"] = "StartCasting 白光之锤",
+        ["StartCasting 白光奔流"] = "StartCasting 白光奔流",
+        ["StartCasting 薄暮机动"] = "StartCasting 薄暮机动",
+        ["StartCasting 虚无泛滥"] = "StartCasting 虚无泛滥",
+        ["StartCasting 虚无波动"] = "StartCasting 虚无波动",
+        ["StartCasting 黑暗之剑"] = "StartCasting 黑暗之剑",
+        ["StartCasting 黑暗奔流"] = "StartCasting 黑暗奔流",
+    };
+    #endregion
     public List<Vector3> BallCheckList = new List<Vector3>
     {
         //From N (left to Right)  
@@ -88,12 +198,14 @@ public class Edens_Verse_Iconoclasm
     };
 
     private readonly object LightsCourseLock = new object();
+    private int DarkStatus;
 
     public void Init(ScriptAccessory accessory)
     {
         accessory.Method.RemoveDraw(".*");
         LightsCourseCount = 0;
         StackCount = 0;
+        DarkStatus = 0;
     }
  
     public void DebugMsg(string str, ScriptAccessory accessory)
@@ -103,12 +215,9 @@ public class Edens_Verse_Iconoclasm
     }
 
     [ScriptMethod(name: "debug", eventType: EventTypeEnum.Chat, eventCondition: ["Message:debug"])]
-    public void debug(Event @event, ScriptAccessory accessory)
-    {
-        var myself = IbcHelper.GetByEntityId(accessory, accessory.Data.Me);
-        if (myself == null) return;
-        var buffId = myself.HasStatus(2238) ? 2238 : 2239;
-        DebugMsg($"buffId: {buffId}", accessory);
+    public void debug(Event @event, ScriptAccessory accessory) {
+        DebugMsg($"Dark: {DarkStatus}", accessory);
+        DebugMsg($"RealLightsCourseCount: {LightsCourseCount}", accessory);
     }
 
 
@@ -171,25 +280,27 @@ public class Edens_Verse_Iconoclasm
                 DebugMsg($"{LightsCourseCount}: {@event.ActionId()}", accessory);
                 if (@event["ActionId"] == "20067") 
                 {
-                    DebugMsg($"{LightsCourseCount}: In 20067", accessory);
+                    DebugMsg($"{LightsCourseCount}: In 4 & 5 20067", accessory);
                     var index0 = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
+                    DebugMsg($"{index0}: index", accessory);
                     if (index0 == 1) 
                     {
-                        DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "Light's Course 4 & 5", delay: 6700);
+                        DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 5500, "1 Light's Course 4 & 5", delay: 6700);
                     } else if (index0 == 2)
                     {
-                        DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "Light's Course 4 & 5", delay: 6700);
+                        DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "2 Light's Course 4 & 5", delay: 6700);
                     }
                     DebugMsg($"is drawing 20067", accessory);
-                    DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index0], new Vector2(10, 25), 6700, "Light's Course 4 & 5");
+                    DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index0], new Vector2(10, 25), 6700, "3 Light's Course 4 & 5");
                     DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index0], new Vector2(10, 25), 4000, 
-                                    "Light's Course 0 & 1 SAFE", new Vector4(0, 1, 0, 1), 6800);
+                                    "1 Light's Course 4 & 5 SAFE", new Vector4(0, 1, 0, 1), 6800);
                 } else 
                 {
+                    DebugMsg($"{LightsCourseCount}: In 4 & 5 else", accessory);
                     var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
-                    DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "Light's Course 4 & 5");
+                    DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "4 Light's Course 4 & 5");
                     DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 4000, 
-                                    "Light's Course 0 & 1 SAFE", new Vector4(0, 1, 0, 1), 6800);
+                                    "2 Light's Course 4 & 5 SAFE", new Vector4(0, 1, 0, 1), 6800);
                 }
             }
 
@@ -202,10 +313,10 @@ public class Edens_Verse_Iconoclasm
                     var index0 = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                     if (index0 == 1) 
                     {
-                        DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "Light's Course 6 & 7", delay: 6700);
+                        DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 5500, "Light's Course 6 & 7", delay: 6700);
                     } else if (index0 == 2)
                     {
-                        DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "Light's Course 6 & 7", delay: 6700);
+                        DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "Light's Course 6 & 7", delay: 6700);
                     }
                     DebugMsg($"is drawing 20067", accessory);
                     DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index0], new Vector2(10, 25), 6700, "Light's Course 6 & 7");
@@ -231,27 +342,27 @@ public class Edens_Verse_Iconoclasm
                     {
                         if (LightsCourseCount == 8 || LightsCourseCount == 9)
                         {
-                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 2000, "Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
-                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 2000, "Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
+                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "1 - 5:5 Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 6700, "1 - 7:7 Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 2000, "1 - 5:5 Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
+                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 2000, "1 - 7:7 Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
                         } else 
                         {
-                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "1 - 5:5 Light's Course 10 & 11", delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 6700, "1 - 7:7 Light's Course 10 & 11", delay: 6700);
                         }
                     } else if (index0 == 2)
                     {
                         if (LightsCourseCount == 8 || LightsCourseCount == 9)
                         {
-                            DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[6], centerPoint[6], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", new Vector4(1, 0, 0, 1), delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 2000, "Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
-                            DrawHelper.DrawRect(accessory, BallStartList[6], centerPoint[6], new Vector2(10, 50), 2000, "Light's Course 8 & 9 & 10 & 11 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
+                            DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "2 - 4:4 Light's Course 8 & 9", new Vector4(1, 0, 0, 1), delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[6], centerPoint[6], new Vector2(10, 50), 6700, "2 - 6:6 Light's Course 8 & 9", new Vector4(1, 0, 0, 1), delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 2000, "2 - 4:4 Light's Course 8 & 9 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
+                            DrawHelper.DrawRect(accessory, BallStartList[6], centerPoint[6], new Vector2(10, 50), 2000, "2 - 6:6 Light's Course 8 & 9 SAFE", new Vector4(0, 1, 0, 1), delay: 13400);
                         } else 
                         {
-                            DrawHelper.DrawRect(accessory, BallStartList[5], centerPoint[5], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", delay: 6700);
-                            DrawHelper.DrawRect(accessory, BallStartList[7], centerPoint[7], new Vector2(10, 50), 6700, "Light's Course 8 & 9 & 10 & 11", delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[6], centerPoint[6], new Vector2(10, 50), 6700, "2 - 6:6 Light's Course 10 & 11", delay: 6700);
+                            DrawHelper.DrawRect(accessory, BallStartList[4], centerPoint[4], new Vector2(10, 50), 6700, "2 - 4:4 Light's Course 10 & 11", delay: 6700);
                         }
                     }
                     var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
@@ -280,17 +391,15 @@ public class Edens_Verse_Iconoclasm
                 LightsCourseCount == 23 || LightsCourseCount == 28 || LightsCourseCount == 29 ||
                 LightsCourseCount == 30 || LightsCourseCount == 31)
             {
-                // 2238 Light     //19516 & 19490     // 0x8BE
-                // 2239 Darkness  //19517 & 19491     // 0x8BF
+                // 2238 Light     //19516 & 19490     // 0x8BE      DarkStatus == 0
+                // 2239 Darkness  //19517 & 19491     // 0x8BF      DarkStatus == 1
                 DebugMsg($"{LightsCourseCount}: {@event.ActionId()}", accessory);
-                var myself = IbcHelper.GetByEntityId(accessory, accessory.Data.Me);
-                if (myself == null) return;
-                var buffId = myself.HasStatus(2238) ? 2238 : 2239;
-                DebugMsg($"buffId: {buffId}", accessory);
+
+                DebugMsg($"DarkStatus: {DarkStatus}", accessory);
                 if (@event["ActionId"] == "19516" || @event["ActionId"] == "19490") 
                 {
                     DebugMsg($"{LightsCourseCount}: In 19516", accessory);
-                    if (buffId == 2238)
+                    if (DarkStatus == 0)
                     {
                         var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                         DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 5000, "Light's Course 12|3456789", new Vector4(1, 0, 0, 1));
@@ -302,7 +411,7 @@ public class Edens_Verse_Iconoclasm
                 } else if (@event["ActionId"] == "19517" || @event["ActionId"] == "19491")
                 {
                     DebugMsg($"{LightsCourseCount}: In 19517", accessory);
-                    if (buffId == 2239)
+                    if (DarkStatus == 1)
                     {
                         var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                         DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 5000, "Light's Course 12|3456789", new Vector4(1, 0, 0, 1));
@@ -319,13 +428,11 @@ public class Edens_Verse_Iconoclasm
                 // 2238 Light     //19516 & 19490     // 0x8BE
                 // 2239 Darkness  //19517 & 19491 & 19521     // 0x8BF
                 DebugMsg($"{LightsCourseCount}: {@event.ActionId()}", accessory);
-                var myself = IbcHelper.GetByEntityId(accessory, accessory.Data.Me);
-                if (myself == null) return;
-                var buffId = myself.HasStatus(2238) ? 2238 : 2239;
-                DebugMsg($"buffId: {buffId}", accessory);
+
+                DebugMsg($"DarkStatus: {DarkStatus}", accessory);
                 if (@event["ActionId"] == "19521")
                 {
-                    if (buffId == 2239)
+                    if (DarkStatus == 1)
                     {
                         var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                         DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "Light's Course 24, 25, 26, 27", new Vector4(1, 0, 0, 1));
@@ -354,7 +461,7 @@ public class Edens_Verse_Iconoclasm
                     }
                 } else if (@event["ActionId"] == "19516")
                 {
-                    if (buffId == 2238)
+                    if (DarkStatus == 0)
                     {
                         var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                         DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "Light's Course 24, 25, 26, 27", new Vector4(1, 0, 0, 1));
@@ -385,7 +492,7 @@ public class Edens_Verse_Iconoclasm
                 {
                     if (@event["ActionId"] == "19517")
                     {
-                        if (buffId == 2239)
+                        if (DarkStatus == 1)
                         {
                             var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                             DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "Light's Course 24, 25, 26, 27", new Vector4(1, 0, 0, 1));
@@ -397,7 +504,7 @@ public class Edens_Verse_Iconoclasm
                     }
                     if (@event["ActionId"] == "19518")
                     {
-                        if (buffId == 2239)
+                        if (DarkStatus == 1)
                         {
                             var index = FindExactPositionIndex(@event.SourcePosition(), BallCheckList);
                             DrawHelper.DrawRect(accessory, @event.SourcePosition(), centerPoint[index], new Vector2(10, 50), 6700, "Light's Course 24, 25, 26, 27", new Vector4(0, 1, 0, 1));
@@ -416,7 +523,12 @@ public class Edens_Verse_Iconoclasm
         }
     }
 
-
+    [ScriptMethod(name: "偏属性记录", eventType: EventTypeEnum.StatusAdd, eventCondition: ["StatusID:regex:^(2239|2238)$"], userControl: false)]
+    public void RecordStatus(Event @event, ScriptAccessory accessory)
+    {
+        if (@event.TargetId != accessory.Data.Me) return;
+        DarkStatus = @event["StatusID"].Equals(2239) ? 1 : 0;
+    }
 
 
 

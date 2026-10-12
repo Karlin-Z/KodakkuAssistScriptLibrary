@@ -1,5 +1,102 @@
 [
   {
+    "Name": "格莱杨拉波尔歼殛战 指路+TTS",
+    "Guid": "3f8c6b2e-91c4-4a87-bd63-0b7a5f0d7e42",
+    "Version": "0.0.0.9",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/DoomTrainScripts.cs",
+    "Note": "画图+指路+TTS。做个测试，使用前请务必调整小队顺序",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1308
+    ]
+  },
+  {
+    "Name": "恩欧歼殛战画图",
+    "Guid": "8c4a9f2d-6b31-4e0a-9f27-1d7c5b8a3e46",
+    "Version": "0.0.0.7",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/Enuo.cs",
+    "Note": "mmw文档+NOCCHH",
+    "UpdateInfo": "0.0.0.7\n更新了时间轴，修复了黑球范围不随双奶移动的问题",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1362
+    ]
+  },
+  {
+    "Name": "g18神秘剧透小脚本",
+    "Guid": "8f2a1d6d-4d3b-4c61-8b9a-6a4b8d0c8b2a",
+    "Version": "0.0.0.3",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/G18.cs",
+    "Note": "剧透",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1279
+    ]
+  },
+  {
+    "Name": "绝凯夫卡P1指路先行版",
+    "Guid": "cc2c6d88-abe5-40be-89da-5f231b9d21d8",
+    "Version": "0.0.1.5",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/Kefka.cs",
+    "Note": "自用拼好挂。请支持K佬&灵视佬",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "阿卡狄亚零式登天斗技场M10S 指路",
+    "Guid": "2c8b7d4a-6e91-4f3c-a5d2-9b7e1f6c8a03",
+    "Version": "0.0.1.0",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/M10S.cs",
+    "Note": "大部分的机制都做了指路，使用之前请务必调整可达鸭内位置和选择打法。由于版本初拿不到arr用来测试，有较大概率会被电...如果电了可以在频道反馈。感谢灵视佬提供的arr\n目前支持\nP2 第一轮打法\n * 水波\n * 镜像水波\n\nP2 第二三轮打法\n * 近战优化\n * 美野\n\n进水牢方式\n * 坦克\n * 近战\n * 治疗\n\n水牢打法\n * 无脑\n * MMW\n",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1323
+    ]
+  },
+  {
+    "Name": "M11S补充画图",
+    "Guid": "6f3d1b82-9d44-4c5a-8277-3a8f5c0f2b1e",
+    "Version": "0.0.1.3",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/M11S.cs",
+    "Note": "设置里面改打法，但目前支持的不是很多有很大概率被电。\n- 该脚本只对RyougiMio佬的画图更新前做指路补充，需要配合使用。\n- 谢谢灵视佬和7dsa1wd1s佬提供的arr",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1325
+    ]
+  },
+  {
+    "Name": "多变迷宫 异闻商客奇谭 指路+画图",
+    "Guid": "a2c7f9d1-4b6e-4f3a-9c18-7d2e6a5b8c41",
+    "Version": "0.0.0.4",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/MerchantsTale.cs",
+    "Note": "目前只完成了剑术大师，老一老三可以用Ryou佬的画图\n感谢Tou_uTou佬和Angelways佬的arr\n攻略使用的是mmw: https://mmw-ffxiv.feishu.cn/wiki/KvdJwQqfziIab3kPBAAcbCYvn5r",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1317
+    ]
+  },
+  {
+    "Name": "魔之塔画图",
+    "Guid": "45819e25-cb2d-4d84-a508-f110dc6a381a",
+    "Version": "0.0.1.11",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/TheForkedTowerMagic.cs",
+    "Note": "写完喽，还有电的可以在频道里圈我\n\n感谢铁虎老大的帮助\n感谢Yatel老大和洋葱炒米老大的arr",
+    "UpdateTime": "2026-10-08T04:41:37Z",
+    "TerritoryIds": [
+      1346
+    ]
+  },
+  {
     "Name": "无敌提示宏",
     "Guid": "FCDCA220-DA96-48B5-909B-C1E336671D54",
     "Version": "0.0.0.4",
@@ -553,11 +650,12 @@
   {
     "Name": "LV.80 伊甸希望乐园 共鸣之章3",
     "Guid": "7732767d-bfb3-4c96-9719-962ba10cec08",
-    "Version": "0.0.0.2",
+    "Version": "0.0.0.3",
     "Author": "Veever",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/VeeverSW/05-Shadowbringers/Edens-Verse-Iconoclasm.cs",
-    "Note": "v0.0.0.2:\n1. 此脚本只用了一个arr回放进行测试，如果出现错画的问题，请dc@我并提供arr回放\n鸭门。",
-    "UpdateTime": "2026-09-13T11:35:15Z",
+    "Note": "v0.0.0.3:\n1. 此脚本只用了2个arr回放进行测试，如果出现错画的问题，请dc@我并提供arr回放\n鸭门。",
+    "UpdateInfo": "v0.0.0.3\n1. 修复了传送门的一些绘制错误问题\n2. 修复了光暗buff不绘制的问题\n3. 新增支持时间轴\n鸭门\n----------------------------------\n\nDuckmen.",
+    "UpdateTime": "2026-10-02T07:46:17Z",
     "TerritoryIds": [
       904
     ]
@@ -864,6 +962,93 @@
     ]
   },
   {
+    "Name": "(M10S)AAC Heavyweight M2 (Savage)",
+    "Guid": "d244ff34-5a89-41e4-a937-7d5c7c6b1348",
+    "Version": "0.1.0.1",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28M10S%29AAC%20Heavyweight%20M2%20%28Savage%29.cs",
+    "Note": "M10S，脚本同时在M10N/S中生效",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1322,
+      1323
+    ]
+  },
+  {
+    "Name": "(M11S)AAC Heavyweight M3 (Savage)",
+    "Guid": "725bcd38-1173-420e-a248-b3e11a1ff1b3",
+    "Version": "0.1.5.0",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28M11S%29AAC%20Heavyweight%20M3%20%28Savage%29.cs",
+    "Note": "M11S，脚本同时在M11N/S中生效。",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1324,
+      1325
+    ]
+  },
+  {
+    "Name": "(M9S)AAC Heavyweight M1 (Savage)",
+    "Guid": "ced5c285-484c-4750-bc85-241e927848f1",
+    "Version": "1.0.0.0",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28M9S%29AAC%20Heavyweight%20M1%20%28Savage%29.cs",
+    "Note": "M9S，脚本同时在M9N/S中生效，注明TTS的机制仅有播报。",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1320,
+      1321
+    ]
+  },
+  {
+    "Name": "(妖星乱舞绝境战)P2 2222指路&自动移动",
+    "Guid": "4c8f82b2-ab7f-45dc-bff1-ffce01bc67c8",
+    "Version": "0.0.4.16",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28%E5%A6%96%E6%98%9F%E4%B9%B1%E8%88%9E%E7%BB%9D%E5%A2%83%E6%88%98%29P2%202222%E6%8C%87%E8%B7%AF%26%E8%87%AA%E5%8A%A8%E7%A7%BB%E5%8A%A8.cs",
+    "Note": "电！\n指挥模式：每轮前4.5秒不显示头标。\n每轮后4.5秒显示本轮攻击1~4、禁止1~2、锁链1~2。\n攻击1234是踩塔的4人从左往右顺，禁止12是左侧的2闲人，锁链12是右侧的的2闲人 禁止1锁链1是靠近boss的 禁止2锁链2是远离boss的。\n!!!!!!!!自动移动依赖于PromeRotation!!!!!!!!",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "(妖星乱舞绝境战)P4 指路&自动移动",
+    "Guid": "79ae48d3-c462-4e4a-8108-9eb507e131b2",
+    "Version": "0.0.1.3",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28%E5%A6%96%E6%98%9F%E4%B9%B1%E8%88%9E%E7%BB%9D%E5%A2%83%E6%88%98%29P4%20%E6%8C%87%E8%B7%AF%26%E8%87%AA%E5%8A%A8%E7%A7%BB%E5%8A%A8.cs",
+    "Note": "P4脚本。\n鸳鸯锅:攻击12345678左 其他圈右\n后续:攻击12是钢铁 禁止12是背对 锁链12是正对\n!!!!!!!!自动移动依赖于PromeRotation!!!!!!!!",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "(异闻商旅奇谭)Another Merchant's Tale",
+    "Guid": "41658b2f-191c-4d68-98c3-c26a10ddce67",
+    "Version": "0.0.0.76",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%28%E5%BC%82%E9%97%BB%E5%95%86%E6%97%85%E5%A5%87%E8%B0%AD%29Another%20Merchant%27s%20Tale.cs",
+    "Note": "Another Merchant's Tale test",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1317
+    ]
+  },
+  {
+    "Name": "格莱杨拉波尔歼殛战 Hell on Rails(Extreme)",
+    "Guid": "b9dfc210-add4-d464-3030-e9e294b384ff",
+    "Version": "0.0.0.2",
+    "Author": "RyougiMio",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/a16239438/%E6%A0%BC%E8%8E%B1%E6%9D%A8%E6%8B%89%E6%B3%A2%E5%B0%94%E6%AD%BC%E6%AE%9B%E6%88%98%20Hell%20on%20Rails%28Extreme%29.cs",
+    "Note": "Bug fix",
+    "UpdateTime": "2026-10-08T04:01:29Z",
+    "TerritoryIds": [
+      1308
+    ]
+  },
+  {
     "Name": "UCOB [巴哈姆特绝境战]",
     "Guid": "884e415a-1210-44cc-bdff-8fab6878e87d",
     "Version": "0.0.2.3",
@@ -1062,12 +1247,12 @@
   {
     "Name": "NecronEx [永恒之暗悲惶歼灭战]",
     "Guid": "1829f7d6-9e64-4cf7-9be4-e5d8a2e03d21",
-    "Version": "0.0.0.7",
+    "Version": "0.0.0.8",
     "Author": "Usami",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/lianying1997/07-Dawntrail/Necron/NecronEx.cs",
-    "Note": "{Version}\n初版，鸭门。",
-    "UpdateInfo": "{Version}\n1. 修复 MT/D1, ST/D2 组在青之二/四重波指路相反的错误。",
-    "UpdateTime": "2026-09-17T01:45:20Z",
+    "Note": "0.0.0.8\n初版，鸭门。",
+    "UpdateInfo": "0.0.0.8\n1. 上传官方库。",
+    "UpdateTime": "2026-09-21T01:00:02Z",
     "TerritoryIds": [
       1296
     ]

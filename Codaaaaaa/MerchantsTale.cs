@@ -21,7 +21,7 @@ namespace Codaaaaaa.MerchantsTale;
     guid: "a2c7f9d1-4b6e-4f3a-9c18-7d2e6a5b8c41",
     name: "多变迷宫 异闻商客奇谭 指路+画图",
     territorys: [1317],
-    version: "0.0.0.4",
+    version: "0.0.0.5",
     author: "Codaaaaaa",
     note: "目前只完成了剑术大师，老一老三可以用Ryou佬的画图\n感谢Tou_uTou佬和Angelways佬的arr\n攻略使用的是mmw: https://mmw-ffxiv.feishu.cn/wiki/KvdJwQqfziIab3kPBAAcbCYvn5r")]
 public class MerchantsTale
@@ -255,6 +255,7 @@ public class MerchantsTale
         }
 
         _四方凶兆3收尾 = false;
+        ClearP3O3();
         lock (_p3O3Lock)
         {
             _p3O3FourthDanger = null;
@@ -1693,6 +1694,7 @@ public class MerchantsTale
 
                         sa.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Rect, dp2);
                     }
+                    ClearP3O3();
                     return;
                 }
 
@@ -2131,7 +2133,7 @@ public static class ScriptAccessoryExtensions
                 sa.Method.EdgeTTS(text);
                 break;
             case MerchantsTale.TTS播报方式.DrTTS:
-                sa.Method.SendChat($"/pdr tts {text}");
+                sa.Method.SendChat($"/edgetts speak {text}");
                 break;
         }
     }

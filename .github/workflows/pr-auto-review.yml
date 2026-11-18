@@ -12,6 +12,8 @@ on:
 permissions:
   contents: write # 合并 PR
   pull-requests: write # 留言 / 合并
+  issues: write # 给跨作者 PR 添加标签
+  statuses: write # 在当前 head 上记录跨作者审核状态，供 /approve 校验
   actions: write # 合并后 dispatch Pages workflow（GITHUB_TOKEN 不能靠 push 触发它）
 
 # 同一个 PR 只保留最新一次审核，避免连推多个提交时并发合并
@@ -52,7 +54,9 @@ jobs:
 
       - name: 自动合并（squash）
         id: merge
-        if: ${{ success() }}
+        # 只有审核脚本明确输出 auto_merge=true（自己的文件夹且校验通过）才合并；
+        # 跨作者 PR 会输出 false，PR 保持打开，等待人工审核。
+        if: ${{ success() && steps.review.outputs.auto_merge == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -65,8 +69,9 @@ jobs:
             --match-head-commit "$PR_HEAD_SHA"
 
       # GITHUB_TOKEN 触发的 push 不会再触发 push 事件，所以必须显式 dispatch Pages workflow
+      # 只有确实合并成功时才需要重建索引（跨作者 PR 会跳过合并，不应触发）
       - name: 触发 Pages 重新生成索引
-        if: ${{ success() }}
+        if: ${{ success() && steps.merge.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}

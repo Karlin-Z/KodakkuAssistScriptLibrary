@@ -50,6 +50,10 @@ jobs:
       - name: 运行内置自测
         run: node .github/scripts/tests/selftest.mjs
 
+      # 审批流程的本地 mock 测试：覆盖所有者批准、状态校验、DoS 短路等
+      - name: 运行审批流程 mock 测试
+        run: node .github/scripts/tests/approval.mock.mjs
+
       - name: 安装前端依赖
         working-directory: .github/web
         run: npm ci

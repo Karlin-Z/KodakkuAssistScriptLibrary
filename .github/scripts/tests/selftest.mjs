@@ -262,10 +262,22 @@ export function runPrReviewChecks() {
     return collected
   }
 
+  const pathReview = (filePath, author, config) => {
+    const collected = []
+    const foreign = []
+    prReview.checkPathRules(filePath, author, config ?? cfg, collected, '路径', foreign)
+    return { errors: collected, foreign }
+  }
+
   expect('正确文件夹通过', !pathErrors('Karlin-Z/M1s.cs', 'Karlin-Z').length)
   expect('大小写不同通过', !pathErrors('karlin-z/M1s.cs', 'Karlin-Z').length)
   expect('子目录通过', !pathErrors('Karlin-Z/sub/M1s.cs', 'Karlin-Z').length)
-  expect('改别人文件夹被拒绝', pathErrors('Other/M1s.cs', 'Karlin-Z').length > 0)
+  expect('改别人文件夹被拒绝（严格模式）', pathErrors('Other/M1s.cs', 'Karlin-Z').length > 0)
+  expect(
+    '改别人文件夹在审核模式转为待审核',
+    !pathReview('Other/M1s.cs', 'Karlin-Z').errors.length &&
+      pathReview('Other/M1s.cs', 'Karlin-Z').foreign.length === 1,
+  )
   expect('根目录文件被拒绝', pathErrors('M1s.cs', 'Karlin-Z').length > 0)
   expect('非 cs 文件被拒绝', pathErrors('Karlin-Z/data.json', 'Karlin-Z').length > 0)
   expect('路径穿越被拒绝', pathErrors('Karlin-Z/../Other/a.cs', 'Karlin-Z').length > 0)
@@ -288,10 +300,97 @@ export function runPrReviewChecks() {
     { status: 'renamed', filename: 'Karlin-Z/a.cs', previous_filename: 'Other/a.cs' },
   ]
   changeResult = prReview.checkChangeSet(renameOut, 'Karlin-Z', cfg)
-  expect('从别人文件夹重命名过来被拒绝', changeResult.errors.length > 0)
+  expect(
+    '从别人文件夹重命名来源不算错误、转为待审核',
+    !changeResult.errors.length &&
+      changeResult.foreign.some((item) => item.path === 'Other/a.cs'),
+    show(changeResult),
+  )
+
+  changeResult = prReview.checkChangeSet(
+    [
+      { status: 'modified', filename: 'Karlin-Z/a.cs' },
+      { status: 'modified', filename: 'Other/b.cs' },
+    ],
+    'Karlin-Z',
+    cfg,
+  )
+  expect(
+    '同时改自己和别人文件夹时待审核',
+    !changeResult.errors.length && changeResult.foreign.length === 1,
+    show(changeResult),
+  )
+
+  changeResult = prReview.checkChangeSet(
+    [
+      { status: 'modified', filename: 'Alice/a.cs' },
+      { status: 'modified', filename: 'Bob/b.cs' },
+    ],
+    'Karlin-Z',
+    cfg,
+  )
+  expect(
+    '同时改多个别人的文件夹直接不通过',
+    changeResult.errors.some((item) => item.includes('只能修改一个其他作者的文件夹')),
+    show(changeResult.errors),
+  )
+  expect(
+    '别人的文件夹按大小写去重',
+    deepEqual(prReview.foreign_folders([{ folder: 'alice' }, { folder: 'Alice' }]), ['alice']),
+  )
+  expect(
+    '联合作者文件夹拆出多个所有者',
+    deepEqual(prReview.foreign_owners([{ folder: 'alice & bob' }]), ['alice', 'bob']),
+  )
+  expect(
+    '非法用户名不生成 @ 提醒',
+    deepEqual(prReview.foreign_owners([{ folder: 'evil\n@all' }]), []),
+  )
 
   changeResult = prReview.checkChangeSet([{ status: 'added', filename: 'README.md' }], 'Karlin-Z', cfg)
   expect('改 README 被拒绝', changeResult.errors.length > 0)
+
+  changeResult = prReview.checkChangeSet(
+    [{ status: 'added', filename: '.github/scripts/x.cs' }],
+    'Karlin-Z',
+    cfg,
+  )
+  expect(
+    '改 .github 仍被拒绝，不进入待审核',
+    changeResult.errors.length > 0 && !changeResult.foreign.length,
+    show(changeResult),
+  )
+
+  // 所有者批准命令：必须完全匹配，避免“我看看”之类的回复误触发合并
+  expect('批准命令精确匹配', prReview.is_approval_comment('/approve', cfg))
+  expect('批准命令忽略大小写与首尾空白', prReview.is_approval_comment('  /APPROVE  ', cfg))
+  expect('中文批准命令', prReview.is_approval_comment('/同意合并', cfg))
+  expect('带附加文字不触发', !prReview.is_approval_comment('/approve 我觉得可以', cfg))
+  expect('普通回复不触发', !prReview.is_approval_comment('我看看', cfg))
+  const customApprove = { ...cfg, approve_commands: ['/lgtm'] }
+  expect(
+    '自定义批准命令生效',
+    prReview.is_approval_comment('/lgtm', customApprove) &&
+      !prReview.is_approval_comment('/approve', customApprove),
+  )
+
+  // 报告净化：PR 文件名可以带换行 / 反引号，不能污染 Actions 日志或 Markdown 评论
+  const evilReport = prReview.describe(
+    [['新增', 'Other/a\n::set-output name=auto_merge::true.cs']],
+    ['文件 Other/a\n::error::x.cs：bad'],
+    ['路径 `x` | y'],
+    [{ path: 'Other/a\n::set-output.cs', folder: 'Other`@evil' }],
+  )
+  expect(
+    '报告不会生成伪造的工作流命令',
+    !evilReport.split('\n').some((line) => line.startsWith('::set-output') || line.startsWith('::error')),
+    evilReport,
+  )
+  expect(
+    '报告转义反引号',
+    !evilReport.includes('`@evil') && !evilReport.includes('`x`'),
+    evilReport,
+  )
 
   const bypassCfg = { ...cfg, maintainers: ['Karlin-Z'] }
   changeResult = prReview.checkChangeSet(
@@ -300,6 +399,13 @@ export function runPrReviewChecks() {
     bypassCfg,
   )
   expect('维护者白名单可跳过路径限制', !changeResult.errors.length, show(changeResult.errors))
+
+  changeResult = prReview.checkChangeSet(
+    [{ status: 'added', filename: 'README.md' }],
+    'Karlin-Z',
+    { ...cfg, maintainers: ['karlin-z'] },
+  )
+  expect('维护者白名单大小写不敏感', !changeResult.errors.length, show(changeResult.errors))
 
   // guid 查重
   const guidMap = { [GUID]: 'alice/A.cs' }

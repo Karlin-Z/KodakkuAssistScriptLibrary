@@ -2,16 +2,20 @@
  * KodakkuAssistScriptLibrary PR 自动审核。
  *
  * 审核规则（见 README.md）：
- *   1. 只允许改动「以 PR 作者的 GitHub 用户名命名」的第一层文件夹；
+ *   1. 修改「以 PR 作者的 GitHub 用户名命名」的第一层文件夹时，校验通过后自动合并；
+ *      修改别人文件夹的 PR 不自动合并，留言并 @ 文件夹所有者，等待人工审核；
  *   2. 只允许新增 / 修改 / 删除 .cs 文件（重命名要求两端都是 .cs）；
  *   3. 每个 .cs 必须包含且只包含一处 [ScriptType(...)] 特性，字段合法：
  *      Name / Guid / Version / Author / Repo / DownloadUrl / Note / UpdateInfo / TerritoryIds
- *      对应插件里的 KodakkuAssist.Script.OnlineScriptInfo（Interface/ScriptAttribute.cs）。
+ *      对应插件里的 KodakkuAssist.Script.OnlineScriptInfo（Interface/ScriptAttribute.cs）；
+ *   4. 跨作者 PR 由文件夹所有者回复 /approve 确认后，重新校验并合并（见 run_approval）；
+ *      一个 PR 最多只能修改一个别人的文件夹，同时修改多个直接判为不通过。
  *
  * 零依赖，只用 Node 内置模块；只通过网络 API 读取 PR 内容，从不执行 PR 中的代码，
  * 也不会编译 C#——[ScriptType(...)] 是当作文本解析的（复用 csharp_meta.mjs）。
  *
- * 由 pr_review.py 移植而来（Python 版已随迁移移除），行为需保持不变，错误文案也算在内。
+ * 由 pr_review.py 移植而来（Python 版已随迁移移除）；除跨作者改动改为人工审核外，
+ * 其余行为与错误文案保持不变。
  */
 
 import fs from 'node:fs'
@@ -68,6 +72,9 @@ const VERSION_DEFAULT = '0.0.0.1'
 // 已提交的 guid -> 源文件 映射（由 merge_repos.mjs 生成），用于 PR 阶段查重
 export const GUID_MAP_PATH = '.github/index/guid-map.json'
 
+// 跨作者 PR 在当前 head 上留下的审核状态；/approve 只认这个状态对应的提交
+export const REVIEW_STATUS_CONTEXT = 'KodakkuAssist/cross-author-review'
+
 // 单个文件大小上限
 const MAX_FILE_BYTES = 2 * 1024 * 1024
 
@@ -84,6 +91,10 @@ export const DEFAULT_CONFIG = {
   ignore_dirs: [],
   // 白名单账号：列表中的登录名不受「只能改自己文件夹」限制（仍会校验内容）。默认空。
   maintainers: [],
+  // 修改别人文件夹的 PR 会打上这些标签，等待文件夹所有者或维护者人工合并
+  foreign_folder_labels: ['跨作者修改'],
+  // 文件夹所有者在 PR 评论里回复其中任一命令，即视为批准合并
+  approve_commands: ['/approve', '/同意合并'],
   // 生成结果（OnlineRepo.json）里出现未知字段时的处理：warn / error / ignore
   unknown_fields: 'warn',
 }
@@ -264,8 +275,13 @@ export function check_filename_component(value, label, errors) {
 // 规则 1 + 2：路径校验
 // --------------------------------------------------------------------------- //
 
-/** 校验单个路径是否满足「自己的文件夹 / 只允许指定扩展名」两条规则。 */
-export function check_path_rules(filePath, author, cfg, errors, ctx) {
+/**
+ * 校验单个路径是否满足「自己的文件夹 / 只允许指定扩展名」两条规则。
+ *
+ * foreign 为数组时，修改别人文件夹不再算错误，而是记进 foreign 等待人工审核；
+ * 不传 foreign（本地检查 / 旧调用）时仍按错误处理。
+ */
+export function check_path_rules(filePath, author, cfg, errors, ctx, foreign = null) {
   if (typeof filePath !== 'string' || !filePath) {
     errors.push(`${ctx}：路径为空或非法`)
     return
@@ -291,13 +307,22 @@ export function check_path_rules(filePath, author, cfg, errors, ctx) {
   }
 
   const folder = parts[0]
-  const same = normalize_login(folder, cfg.username_case_insensitive) ===
-    normalize_login(author, cfg.username_case_insensitive)
-  if (!same) {
-    errors.push(
-      `${ctx}：第一层文件夹 ${pyReprAny(folder)} 与 PR 作者 ${pyReprAny(author)} 不一致；` +
-      `你只能修改自己的文件夹 ${author}/`
-    )
+  if (folder.startsWith('.') || folder.startsWith('_')) {
+    // .github / _site 这类目录不是贡献者文件夹，不能当作「跨作者修改」放行
+    errors.push(`${ctx}：${pyReprAny(folder)}/ 不是贡献者文件夹，不能修改`)
+  } else {
+    const same = normalize_login(folder, cfg.username_case_insensitive) ===
+      normalize_login(author, cfg.username_case_insensitive)
+    if (!same) {
+      if (Array.isArray(foreign)) {
+        foreign.push({ path: filePath, folder, author, ctx })
+      } else {
+        errors.push(
+          `${ctx}：第一层文件夹 ${pyReprAny(folder)} 与 PR 作者 ${pyReprAny(author)} 不一致；` +
+          `你只能修改自己的文件夹 ${author}/`
+        )
+      }
+    }
   }
 
   if (!(cfg.allow_subfolders ?? true) && parts.length > 2) {
@@ -315,8 +340,8 @@ export function check_path_rules(filePath, author, cfg, errors, ctx) {
 }
 
 /** 契约名：就地往 collected 数组里 push 错误字符串。 */
-export function checkPathRules(filePath, author, cfg, collected, label) {
-  check_path_rules(filePath, author, cfg, collected, label)
+export function checkPathRules(filePath, author, cfg, collected, label, foreign = null) {
+  check_path_rules(filePath, author, cfg, collected, label, foreign)
 }
 
 // --------------------------------------------------------------------------- //
@@ -728,6 +753,21 @@ async function api_json(api_path) {
   return body.length ? pyJsonLoads(body.toString('utf8')) : null
 }
 
+/** 向 API 发送带 JSON body 的请求（POST / DELETE 等），返回解析后的 JSON 或 null。 */
+async function api_send(method, api_path, body) {
+  const headers = _api_headers('application/vnd.github+json')
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
+  const response = await fetch(`${API_URL}${api_path}`, {
+    method,
+    body: body === undefined ? undefined : Buffer.from(JSON.stringify(body), 'utf8'),
+    headers,
+    signal: AbortSignal.timeout(30000),
+  })
+  if (!response.ok) throw new HttpError(response.status, response.statusText)
+  const bytes = Buffer.from(await response.arrayBuffer())
+  return bytes.length ? pyJsonLoads(bytes.toString('utf8')) : null
+}
+
 /** GET 一个 API 路径并取原始字节。 */
 async function api_raw(api_path) {
   const response = await fetch(`${API_URL}${api_path}`, {
@@ -738,8 +778,15 @@ async function api_raw(api_path) {
   return Buffer.from(await response.arrayBuffer())
 }
 
-/** 分页拉取 PR 改动的文件列表。 */
-export async function list_changed_files(repo, pr_number) {
+/**
+ * 分页拉取 PR 改动的文件列表。
+ *
+ * maxFiles 非空时最多保留 maxFiles + 1 个文件就停止翻页：审核只需要知道
+ * 「是否超过上限」，没必要为大 PR 翻完几十页。多保留 1 个用于区分「刚好等于上限」。
+ */
+export async function list_changed_files(repo, pr_number, maxFiles = null) {
+  // 配置里的整数由 pyJsonLoads 解析成 BigInt，算术前先转成 Number
+  const limit = maxFiles === null ? null : Number(maxFiles)
   const files = []
   let page = 1
   for (;;) {
@@ -747,6 +794,10 @@ export async function list_changed_files(repo, pr_number) {
     if (!batch) break
     files.push(...batch)
     if (batch.length < 100) break
+    if (limit !== null && files.length > limit) {
+      files.length = limit + 1
+      break
+    }
     page += 1
   }
   return files
@@ -896,11 +947,12 @@ export function checkGuidCollisions(entries, renamedFiles, author, guidMap, cfg)
 // 审核主流程
 // --------------------------------------------------------------------------- //
 
-/** 路径层面校验。返回 [errors, warnings, rows]。 */
+/** 路径层面校验。返回 [errors, warnings, rows, foreign]。 */
 export function check_change_set(files, author, cfg) {
   const errors = []
   const warnings = []
   const rows = []
+  const foreign = []
 
   const max_files = cfg.max_files_per_pr ?? 100
   if (files.length > max_files) {
@@ -915,7 +967,9 @@ export function check_change_set(files, author, cfg) {
     )
   }
 
-  const bypass = (cfg.maintainers || []).includes(author)
+  const bypass = (cfg.maintainers || []).some(
+    (login) => normalize_login(String(login), true) === normalize_login(author, true),
+  )
   if (bypass) {
     warnings.push(`${author} 在维护者白名单中，跳过「只能修改自己文件夹」限制`)
   }
@@ -928,7 +982,7 @@ export function check_change_set(files, author, cfg) {
     rows.push([label, filePath])
 
     if (!bypass) {
-      check_path_rules(filePath, author, cfg, errors, `文件 ${filePath}`)
+      check_path_rules(filePath, author, cfg, errors, `文件 ${filePath}`, foreign)
     }
 
     // 重命名 / 复制：来源路径同样必须合法，否则等于绕过限制
@@ -936,25 +990,110 @@ export function check_change_set(files, author, cfg) {
       const prefix = status === 'renamed' ? '重命名前' : '复制来源'
       rows.push([`${label}（来源）`, previous])
       if (!bypass) {
-        check_path_rules(previous, author, cfg, errors, `文件 ${previous}（${prefix}路径）`)
+        check_path_rules(previous, author, cfg, errors, `文件 ${previous}（${prefix}路径）`, foreign)
       }
     }
   }
 
-  return [errors, warnings, rows]
+  // 一个 PR 只允许改一个别人的文件夹；同时改多个会直接判定为不通过，
+  // 避免出现「多个所有者都要批准」的僵局。重命名跨两个作者文件夹也按此处理。
+  const foreign_dirs = foreign_folders(foreign)
+  if (foreign_dirs.length > 1) {
+    errors.push(
+      `本 PR 同时修改了多个其他作者的文件夹（${foreign_dirs.map((folder) => `${folder}/`).join('、')}）；` +
+      '一个 PR 只能修改一个其他作者的文件夹，请拆成多个 PR'
+    )
+  }
+
+  return [errors, warnings, rows, foreign]
 }
 
-/** 契约名：返回对象 {errors, warnings, rows}。 */
+/** 契约名：返回对象 {errors, warnings, rows, foreign}。 */
 export function checkChangeSet(files, author, cfg) {
-  const [errors, warnings, rows] = check_change_set(files, author, cfg)
-  return { errors, warnings, rows }
+  const [errors, warnings, rows, foreign] = check_change_set(files, author, cfg)
+  return { errors, warnings, rows, foreign }
 }
 
-/** 生成报告正文：改动清单 + 错误 + 提醒。 */
-export function describe(files, errors, warnings) {
+/** 跨作者改动涉及的文件夹（大小写不敏感去重，保留首次出现的写法）。 */
+export function foreign_folders(foreign) {
+  const folders = []
+  const seen = new Set()
+  for (const item of foreign || []) {
+    const folder = String(item.folder || '')
+    if (!folder) continue
+    const key = normalize_login(folder, true)
+    if (!seen.has(key)) {
+      seen.add(key)
+      folders.push(folder)
+    }
+  }
+  return folders
+}
+
+// GitHub 用户名只允许字母、数字和连字符；文件夹名来自 PR，@ 前必须过滤，
+// 避免把 `@all` / 换行之类的路径片段拼进评论。
+const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
+
+/** 跨作者改动涉及的文件夹所有者（支持 `作者a & 作者b` 联合作者格式）。 */
+export function foreign_owners(foreign) {
+  const owners = []
+  const seen = new Set()
+  for (const item of foreign || []) {
+    for (const part of String(item.folder || '').split(/[&＆]/)) {
+      const owner = part.trim()
+      if (!GITHUB_LOGIN_RE.test(owner)) continue
+      const key = normalize_login(owner, true)
+      if (!seen.has(key)) {
+        seen.add(key)
+        owners.push(owner)
+      }
+    }
+  }
+  return owners
+}
+
+/** 跨作者改动按路径去重，避免重命名时同一个文件出现两次。 */
+function unique_foreign(foreign) {
+  const seen = new Set()
+  const out = []
+  for (const item of foreign || []) {
+    if (seen.has(item.path)) continue
+    seen.add(item.path)
+    out.push(item)
+  }
+  return out
+}
+
+/**
+ * 把来自 PR 的文本压成单行，并转义会破坏 Markdown / Actions 命令的字符。
+ *
+ * Git 文件名可以包含换行和反引号：换行会让 Runner 把下一行当成 `::set-output`
+ * 之类的工作流命令，反引号则会打破评论里的代码块。所有路径、文件夹名、错误文案
+ * 在进入日志和 PR 评论前都要经过这里。
+ */
+function safe_text(value) {
+  return String(value ?? '')
+    .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ')
+    .replace(/`/g, "'")
+    .replace(/\|/g, '\\|')
+    .replace(/::/g, ': :')
+}
+
+/** 用安全的行内代码包住路径 / 文件夹名。 */
+function safe_code(value) {
+  return `\`${safe_text(value)}\``
+}
+
+/** 输出到 Actions 日志前再兜一层：任何行首的命令前缀都转义掉。 */
+function safe_stdout(text) {
+  return String(text).replace(/^::/gm, '\\::').replace(/^##\[/gm, '\\##[')
+}
+
+/** 生成报告正文：改动清单 + 错误 + 提醒 + 跨作者改动。 */
+export function describe(files, errors, warnings, foreign = []) {
   const lines = ['### 改动清单', '', '| 状态 | 文件 |', '| --- | --- |']
   for (const [label, filePath] of files) {
-    lines.push(`| ${label} | \`${filePath}\` |`)
+    lines.push(`| ${safe_text(label)} | ${safe_code(filePath)} |`)
   }
   lines.push('')
 
@@ -962,35 +1101,47 @@ export function describe(files, errors, warnings) {
     lines.push('### ❌ 需要修复')
     lines.push('')
     errors.forEach((item, index) => {
-      lines.push(`${index + 1}. ${item}`)
+      lines.push(`${index + 1}. ${safe_text(item)}`)
     })
     lines.push('')
   }
 
   if (warnings.length) {
-    lines.push('### ⚠️ 提醒（不影响合并）')
+    lines.push('### ⚠️ 提醒（不阻塞）')
     lines.push('')
     for (const item of warnings) {
-      lines.push(`- ${item}`)
+      lines.push(`- ${safe_text(item)}`)
     }
     lines.push('')
   }
 
-  if (!errors.length && !warnings.length) {
+  const foreign_items = unique_foreign(foreign)
+  if (foreign_items.length) {
+    lines.push('### 🔀 跨作者修改')
+    lines.push('')
+    lines.push('以下文件位于其他作者的文件夹，本 PR 不会自动合并：')
+    lines.push('')
+    for (const item of foreign_items) {
+      lines.push(`- ${safe_code(item.path)}（属于 ${safe_code(item.folder)}）`)
+    }
+    lines.push('')
+  }
+
+  if (!errors.length && !warnings.length && !foreign_items.length) {
     lines.push('未发现问题。')
     lines.push('')
   }
 
   lines.push(
-    '> 规则：只能修改以自己 GitHub 用户名命名的文件夹，只能新增 / 修改 / 删除 `.cs`，' +
-    '每个 `.cs` 必须包含且只包含一处 `[ScriptType(...)]`。详见 `README.md`。'
+    '> 规则：修改自己文件夹的 PR 校验通过后自动合并；修改别人文件夹的 PR 需要文件夹所有者或维护者确认。' +
+    '只能新增 / 修改 / 删除 `.cs`，每个 `.cs` 必须包含且只包含一处 `[ScriptType(...)]`。详见 `README.md`。'
   )
   return lines.join('\n')
 }
 
 /** 拼出完整的 PR 评论内容。 */
-export function build_report(title, rows, errors, warnings) {
-  return [`## 🤖 PR 自动审核：${title}`, '', describe(rows, errors, warnings)].join('\n')
+export function build_report(title, rows, errors, warnings, foreign = []) {
+  return [`## 🤖 PR 自动审核：${title}`, '', describe(rows, errors, warnings, foreign)].join('\n')
 }
 
 /** 追加到 Actions 运行摘要；不在 Actions 环境下静默跳过。 */
@@ -1026,48 +1177,186 @@ export async function post_comment_safely(repo, pr_number, body) {
   }
 }
 
-/** CI 入口：审核 PR 并输出报告。返回 0 通过 / 1 未通过 / 2 无法执行。 */
-export async function run_ci() {
-  const repo = process.env.GITHUB_REPOSITORY ?? ''
-  const pr_number = process.env.PR_NUMBER ?? ''
-  const author = process.env.PR_AUTHOR ?? ''
-  const head_sha = process.env.PR_HEAD_SHA ?? ''
-
-  const missing = [
-    ['GITHUB_REPOSITORY', repo], ['PR_NUMBER', pr_number], ['PR_AUTHOR', author],
-  ].filter(([, value]) => !value).map(([key]) => key)
-  if (missing.length) {
-    println(`::error::缺少环境变量：${missing.join(', ')}`)
-    return 2
-  }
-
-  const cfg = load_config()
-
-  let files
+/** 写 GitHub Actions step output；不在 Actions 环境下静默跳过。 */
+export function set_output(name, value) {
+  const output_path = process.env.GITHUB_OUTPUT
+  if (!output_path) return false
   try {
-    files = await list_changed_files(repo, pr_number)
+    fs.appendFileSync(output_path, `${name}=${String(value)}\n`, 'utf8')
+    return true
   } catch (exc) {
-    const message = `无法读取 PR 改动（GitHub API 错误）：${exc}`
-    println(`::error::${message}`)
-    write_step_summary(`## 🤖 PR 自动审核：无法执行\n\n${message}\n`)
+    // 写不进去时 workflow 不会再拿到 auto_merge/merged，必须让人从日志里看到
+    println(`::warning::无法写入 GitHub Actions 输出 ${name}：${exc}`)
+    return false
+  }
+}
+
+/** 配置里的跨作者标签；兼容写成单个字符串的情况。 */
+function foreign_labels(cfg) {
+  const value = cfg.foreign_folder_labels ?? []
+  const list = Array.isArray(value) ? value : [value]
+  return list.map((item) => String(item).trim()).filter(Boolean)
+}
+
+/** 配置里的批准命令（保留原始写法）；兼容写成单个字符串的情况。 */
+function approval_command_list(cfg) {
+  const value = cfg.approve_commands ?? []
+  const list = Array.isArray(value) ? value : [value]
+  return list.map((item) => String(item).trim()).filter(Boolean)
+}
+
+/** 用于匹配的批准命令集合（大小写不敏感）。 */
+function approval_commands(cfg) {
+  return new Set(approval_command_list(cfg).map((item) => item.toLowerCase()))
+}
+
+/** 提示文案里展示的批准命令：优先用配置里的第一条。 */
+function primary_approval_command(cfg) {
+  return approval_command_list(cfg)[0] || '/approve'
+}
+
+/** 评论内容是否恰好是一条批准命令（不接受附带其它文字，避免误触发）。 */
+export function is_approval_comment(body, cfg) {
+  return approval_commands(cfg).has(String(body ?? '').trim().toLowerCase())
+}
+
+/** 确保仓库里存在该标签（已存在时 API 返回 422，忽略）。 */
+async function ensure_label(repo, name) {
+  try {
+    await api_send('POST', `/repos/${repo}/labels`, {
+      name,
+      color: 'fbca04',
+      description: '修改了其他作者的文件夹，需要人工审核',
+    })
+  } catch (exc) {
+    if (!(exc instanceof HttpError) || exc.code !== 422) throw exc
+  }
+}
+
+/** 给 PR 打标签；失败只告警，不影响审核结论。 */
+export async function add_labels_safely(repo, pr_number, labels) {
+  const names = (Array.isArray(labels) ? labels : []).map((item) => String(item).trim()).filter(Boolean)
+  if (!names.length) return
+  try {
+    for (const name of names) await ensure_label(repo, name)
+    await api_send('POST', `/repos/${repo}/issues/${pr_number}/labels`, { labels: names })
+  } catch (exc) {
+    println(`::warning::无法给 PR 添加标签 ${names.join(', ')}：${exc}`)
+  }
+}
+
+/** 移除 PR 上的跨作者标签；失败只告警，不影响审核结论。 */
+export async function remove_labels_safely(repo, pr_number, labels) {
+  const names = (Array.isArray(labels) ? labels : []).map((item) => String(item).trim()).filter(Boolean)
+  for (const name of names) {
     try {
-      await post_comment(repo, pr_number, `## 🤖 PR 自动审核：无法执行\n\n${message}\n\n未做合并，请维护者手动检查。`)
-    } catch {
-      // 忽略
+      await api_send('DELETE', `/repos/${repo}/issues/${pr_number}/labels/${pyQuote(name)}`)
+    } catch (exc) {
+      // 标签本来就没打上时返回 404，属正常情况
+      if (!(exc instanceof HttpError) || exc.code !== 404) {
+        println(`::warning::无法移除标签 ${name}：${exc}`)
+      }
     }
-    return 2
+  }
+}
+
+/** 在当前 head 上写入跨作者审核状态；失败只告警。 */
+async function set_review_status(repo, sha, state, description) {
+  if (!sha) return
+  try {
+    await api_send('POST', `/repos/${repo}/statuses/${sha}`, {
+      state,
+      context: REVIEW_STATUS_CONTEXT,
+      description: String(description).slice(0, 140),
+    })
+  } catch (exc) {
+    println(`::warning::无法写入跨作者审核状态：${exc}`)
+  }
+}
+
+/**
+ * 读取当前 head 的跨作者审核状态。
+ * success：该 head 已通过内容校验；failed：校验未通过；not_ready：还没审过；
+ * unknown：状态查询失败（不能据此批准）。
+ */
+async function reviewed_status(repo, sha) {
+  try {
+    const statuses = await api_json(`/repos/${repo}/commits/${sha}/statuses?per_page=100`)
+    if (!Array.isArray(statuses)) return 'not_ready'
+    const latest = statuses.find((item) => item && item.context === REVIEW_STATUS_CONTEXT)
+    if (!latest) return 'not_ready'
+    if (latest.state === 'success') return 'success'
+    if (latest.state === 'failure' || latest.state === 'error') return 'failed'
+    return 'not_ready'
+  } catch (exc) {
+    println(`::warning::无法读取跨作者审核状态：${exc}`)
+    return 'unknown'
+  }
+}
+
+/**
+ * PR 是否仍处于打开状态；传 expectedSha 时还要求 head 没有变化。
+ * 查询失败时保守放行，不阻断正常审核。
+ */
+async function pull_request_is_open(repo, pr_number, expectedSha = null) {
+  try {
+    const pr = await api_json(`/repos/${repo}/pulls/${pr_number}`)
+    if (!isPlainObject(pr) || pr.state !== 'open' || pr.merged) return false
+    if (expectedSha && pr.head && pr.head.sha !== expectedSha) return false
+    return true
+  } catch (exc) {
+    println(`::warning::无法确认 PR 状态：${exc}`)
+    return true
+  }
+}
+
+/**
+ * 拉取并完整审核一个 PR。
+ *
+ * files 已传时不再重复拉取（批准流程会先拉一次做轻量所有者校验）。
+ * 路径层面已有错误时直接返回，不下载 .cs 内容——既避免重复报错，
+ * 也防止超大 / 多文件夹 PR 被反复拉取内容。
+ *
+ * 返回 { files, errors, warnings, rows, foreign, known_folders, api_error }。
+ * api_error 非空表示连文件列表都拿不到，调用方决定如何提示。
+ */
+async function review_pull_request(repo, pr_number, author, head_sha, base_ref, cfg, files = null) {
+  if (files === null) {
+    try {
+      files = await list_changed_files(repo, pr_number, Number(cfg.max_files_per_pr ?? 100) + 1)
+    } catch (exc) {
+      return {
+        files: null,
+        errors: [],
+        warnings: [],
+        rows: [],
+        foreign: [],
+        known_folders: new Set(),
+        api_error: `无法读取 PR 改动（GitHub API 错误）：${exc}`,
+      }
+    }
   }
 
   const script_guids = []
+  const known_folders = new Set()
   let errors
   let warnings
   let rows
+  let foreign = []
   if (!files.length) {
     errors = ['该 PR 没有包含任何文件改动']
     warnings = []
     rows = []
+    foreign = []
   } else {
-    ;[errors, warnings, rows] = check_change_set(files, author, cfg)
+    ;[errors, warnings, rows, foreign] = check_change_set(files, author, cfg)
+
+    // 路径层面已经不可能通过时，不再下载任何 .cs 内容。
+    // 这样超大 PR、多作者文件夹、非法路径都无法靠反复提交触发大量 API 调用。
+    if (errors.length) {
+      warnings.push('存在路径层面的错误，本次跳过 .cs 内容校验；修复后重新提交会重新校验。')
+      return { files, errors, warnings, rows, foreign, known_folders, api_error: null }
+    }
 
     for (const item of files) {
       const filePath = item.filename ?? ''
@@ -1109,7 +1398,6 @@ export async function run_ci() {
       }
     }
 
-    const base_ref = process.env.PR_BASE_REF || process.env.PR_BASE_SHA || ''
     let guid_map = null
     try {
       guid_map = await load_guid_map(repo, base_ref)
@@ -1119,23 +1407,291 @@ export async function run_ci() {
     if (guid_map === null && base_ref) {
       println(`::notice::${GUID_MAP_PATH} 尚不存在，本次跳过 guid 查重`)
     }
+    for (const mapped of Object.values(guid_map || {})) {
+      if (typeof mapped === 'string' && mapped.includes('/')) {
+        known_folders.add(normalize_login(mapped.split('/')[0], true))
+      }
+    }
     errors.push(...check_guid_collisions(script_guids, own_paths, author, guid_map, cfg))
   }
 
+  return { files, errors, warnings, rows, foreign, known_folders, api_error: null }
+}
+
+/** CI 入口：审核 PR 并输出报告。返回 0 通过 / 1 未通过 / 2 无法执行。 */
+export async function run_ci() {
+  const repo = process.env.GITHUB_REPOSITORY ?? ''
+  const pr_number = process.env.PR_NUMBER ?? ''
+  const author = process.env.PR_AUTHOR ?? ''
+  const head_sha = process.env.PR_HEAD_SHA ?? ''
+
+  const missing = [
+    ['GITHUB_REPOSITORY', repo], ['PR_NUMBER', pr_number], ['PR_AUTHOR', author],
+    ['PR_HEAD_SHA', head_sha],
+  ].filter(([, value]) => !value).map(([key]) => key)
+  if (missing.length) {
+    println(`::error::缺少环境变量：${missing.join(', ')}`)
+    return 2
+  }
+
+  const cfg = load_config()
+  const base_ref = process.env.PR_BASE_REF || process.env.PR_BASE_SHA || ''
+
+  // 已关闭/合并、或事件里的 head 已经不是最新提交时，不再审核。
+  if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
+    println(`::notice::PR #${pr_number} 已关闭、已合并或已有新提交，跳过审核`)
+    set_output('auto_merge', 'false')
+    return 0
+  }
+
+  const review = await review_pull_request(repo, pr_number, author, head_sha, base_ref, cfg)
+  if (review.api_error) {
+    const message = review.api_error
+    println(`::error::${message}`)
+    write_step_summary(`## 🤖 PR 自动审核：无法执行\n\n${message}\n`)
+    try {
+      await post_comment(repo, pr_number, `## 🤖 PR 自动审核：无法执行\n\n${message}\n\n未做合并，请维护者手动检查。`)
+    } catch {
+      // 忽略
+    }
+    return 2
+  }
+
+  const { rows, errors, warnings, foreign, known_folders } = review
+
+  // 审核期间 PR 可能已被合并，或作者又推了新提交；旧结果不要再补发。
+  if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
+    println(`::notice::PR #${pr_number} 已关闭、已合并或已有新提交，跳过本次审核结果`)
+    set_output('auto_merge', 'false')
+    return 0
+  }
+
   if (errors.length) {
-    const report = build_report('❌ 未通过', rows, errors, warnings)
-    println(report)
+    if (foreign.length) {
+      await set_review_status(repo, head_sha, 'failure', '内容校验未通过，请修复后重新提交')
+    }
+    let report = build_report('❌ 未通过', rows, errors, warnings, foreign)
+    if (foreign.length) {
+      const command = primary_approval_command(cfg)
+      report +=
+        `\n\n此外，本 PR 修改了其他作者的文件夹；修复上述问题后仍需文件夹所有者回复 \`${command}\` ` +
+        '或维护者确认，不会自动合并。'
+    }
+    println(safe_stdout(report))
+    write_step_summary(report)
+    await post_comment_safely(repo, pr_number, report)
+    set_output('auto_merge', 'false')
+    return 1
+  }
+
+  if (foreign.length) {
+    // 只 @ 已经在仓库里存在脚本的作者文件夹，避免 PR 作者随便建个 Victim/ 就能骚扰别人
+    const mentionable = foreign.filter(
+      (item) => known_folders.has(normalize_login(item.folder, true)),
+    )
+    const owners = foreign_owners(mentionable)
+    const who = owners.length ? owners.map((owner) => `@${owner}`).join(' ') : '文件夹所有者'
+    const command = primary_approval_command(cfg)
+    const short_sha = head_sha.slice(0, 7)
+    await set_review_status(repo, head_sha, 'success', `内容校验通过，等待所有者批准（${short_sha}）`)
+    let report = build_report('⏳ 待人工审核', rows, errors, warnings, foreign)
+    report +=
+      `\n\n当前版本：\`${short_sha}\`\n\n` +
+      `脚本内容校验已通过。请 ${who} 回复 \`${command}\` 确认，或由维护者手动合并。` +
+      '本 PR 需要所有者确认后才会合并。'
+    println(safe_stdout(report))
+    write_step_summary(report)
+    await add_labels_safely(repo, pr_number, foreign_labels(cfg))
+    await post_comment_safely(repo, pr_number, report)
+    set_output('auto_merge', 'false')
+    return 0
+  }
+
+  const report = build_report('✅ 通过', rows, errors, warnings)
+  println(safe_stdout(report))
+  write_step_summary(report)
+  await remove_labels_safely(repo, pr_number, foreign_labels(cfg))
+  set_output('auto_merge', 'true')
+  if (warnings.length) {
+    await post_comment_safely(repo, pr_number, report + '\n校验通过，将自动 squash 合并。')
+  }
+  return 0
+}
+
+/**
+ * 文件夹所有者批准入口：PR 会话里回复 /approve 后触发。
+ *
+ * 只信任评论者的 GitHub 登录名（必须等于被改文件夹名），并重新校验当前 head；
+ * 合并时带 sha，防止评论后作者又推新代码。
+ * 返回 0 成功或忽略 / 1 未通过或合并失败 / 2 无法执行。
+ */
+export async function run_approval() {
+  const repo = process.env.GITHUB_REPOSITORY ?? ''
+  const pr_number = process.env.PR_NUMBER ?? ''
+  const comment_author = process.env.COMMENT_AUTHOR ?? ''
+  const comment_body = process.env.COMMENT_BODY ?? ''
+  const comment_type = process.env.COMMENT_TYPE ?? ''
+
+  const missing = [
+    ['GITHUB_REPOSITORY', repo], ['PR_NUMBER', pr_number], ['COMMENT_AUTHOR', comment_author],
+  ].filter(([, value]) => !value).map(([key]) => key)
+  if (missing.length) {
+    println(`::error::缺少环境变量：${missing.join(', ')}`)
+    return 2
+  }
+
+  // 机器人自己的评论、其他 App 的评论一律忽略
+  if (comment_type === 'Bot' || comment_author.toLowerCase().endsWith('[bot]')) return 0
+
+  const cfg = load_config()
+  if (!is_approval_comment(comment_body, cfg)) return 0
+
+  let pr
+  try {
+    pr = await api_json(`/repos/${repo}/pulls/${pr_number}`)
+  } catch (exc) {
+    println(`::warning::无法读取 PR #${pr_number}：${exc}`)
+    return 2
+  }
+  if (!isPlainObject(pr)) {
+    println(`::warning::PR #${pr_number} 返回内容不是对象，跳过`)
+    return 2
+  }
+  if (pr.state !== 'open' || pr.merged) {
+    println(`::notice::PR #${pr_number} 已关闭或已合并，忽略批准命令`)
+    return 0
+  }
+  if (pr.draft) {
+    println(`::notice::PR #${pr_number} 仍是 draft，忽略批准命令`)
+    return 0
+  }
+
+  const author = pr.user && pr.user.login ? String(pr.user.login) : ''
+  const head_sha = pr.head && pr.head.sha ? String(pr.head.sha) : ''
+  const base_ref = pr.base && pr.base.ref ? String(pr.base.ref) : ''
+  if (!author || !head_sha) {
+    println(`::warning::PR #${pr_number} 缺少作者或 head SHA，无法审核`)
+    return 2
+  }
+  if (normalize_login(author, true) === normalize_login(comment_author, true)) {
+    println('::notice::PR 作者本人不能批准跨作者修改')
+    return 0
+  }
+
+  let files
+  try {
+    files = await list_changed_files(repo, pr_number, Number(cfg.max_files_per_pr ?? 100) + 1)
+  } catch (exc) {
+    const message = `无法读取 PR 改动（GitHub API 错误）：${exc}`
+    println(`::error::${message}`)
+    await post_comment_safely(repo, pr_number, `## 🤖 所有者批准：无法执行\n\n${message}\n`)
+    return 2
+  }
+
+  // 轻量预检：只解析路径，不下载 .cs；先确认评论者确实是被改文件夹的所有者。
+  // 非所有者的 /approve 到这里就返回，不能靠刷评论触发内容下载。
+  const [, , , pre_foreign] = check_change_set(files, author, cfg)
+  if (!pre_foreign.length) {
+    println(`::notice::PR #${pr_number} 没有修改别人的文件夹，不需要所有者批准`)
+    return 0
+  }
+  const folders = foreign_folders(pre_foreign)
+  const owner_key = normalize_login(comment_author, true)
+  const owns_some = folders.some((folder) => normalize_login(folder, true) === owner_key)
+  if (!owns_some) {
+    // 不是被改文件夹的所有者：静默忽略，避免任何用户刷 /approve 都能得到回复
+    println(`::notice::${comment_author} 不是被修改文件夹的所有者，忽略批准命令`)
+    return 0
+  }
+
+  // 批准只对「机器人已经审核过的当前 head」有效。
+  // 作者在所有者评论前刚推了新提交、或评论后才推送，都会在这里被拦下。
+  const status = await reviewed_status(repo, head_sha)
+  if (status !== 'success') {
+    const short_sha = head_sha.slice(0, 7)
+    let message
+    if (status === 'unknown') {
+      message = '暂时无法确认当前版本的自动审核状态，请稍后重试或联系维护者。'
+    } else if (status === 'failed') {
+      message = '当前版本的自动审核未通过，请先修复问题并等待重新审核。'
+    } else {
+      message =
+        '当前版本还没有完成自动审核，或代码在审核后已更新；请等待机器人重新审核后再回复批准命令。'
+    }
+    await post_comment_safely(
+      repo,
+      pr_number,
+      `## 🤖 所有者批准\n\n当前版本：\`${short_sha}\`\n\n${message}`,
+    )
+    return 0
+  }
+
+  const review = await review_pull_request(repo, pr_number, author, head_sha, base_ref, cfg, files)
+  if (review.api_error) {
+    const message = review.api_error
+    println(`::error::${message}`)
+    await post_comment_safely(repo, pr_number, `## 🤖 所有者批准：无法执行\n\n${message}\n`)
+    return 2
+  }
+
+  const { rows, errors, warnings, foreign } = review
+  if (!foreign.length) {
+    println(`::notice::PR #${pr_number} 没有修改别人的文件夹，不需要所有者批准`)
+    return 0
+  }
+
+  if (errors.length) {
+    await set_review_status(repo, head_sha, 'failure', '内容校验未通过，请修复后重新提交')
+    let report = build_report('❌ 未通过', rows, errors, warnings, foreign)
+    report += '\n\n所有者批准不会绕过校验，请先修复上述问题。'
+    println(safe_stdout(report))
     write_step_summary(report)
     await post_comment_safely(repo, pr_number, report)
     return 1
   }
 
-  const report = build_report('✅ 通过', rows, errors, warnings)
-  println(report)
-  write_step_summary(report)
-  if (warnings.length) {
-    await post_comment_safely(repo, pr_number, report + '\n校验通过，将自动 squash 合并。')
+  // 审核期间如果 head 已变化，批准就对不上所有者看到的版本了
+  if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
+    await post_comment_safely(
+      repo,
+      pr_number,
+      '## 🤖 所有者批准\n\n审核期间 PR 已更新或关闭，请等待机器人重新审核后再回复批准命令。',
+    )
+    return 0
   }
+
+  let merge_result
+  try {
+    merge_result = await api_send('PUT', `/repos/${repo}/pulls/${pr_number}/merge`, {
+      merge_method: 'squash',
+      sha: head_sha,
+    })
+  } catch (exc) {
+    const message =
+      `自动合并失败：${exc}。可能是 PR 在审核后又有更新、存在合并冲突，或分支保护不允许。`
+    println(`::warning::${message}`)
+    await post_comment_safely(
+      repo,
+      pr_number,
+      `## 🤖 所有者批准\n\n${message}\n\n请重新确认后再次回复批准命令，或由维护者手动合并。`,
+    )
+    return 1
+  }
+
+  if (!isPlainObject(merge_result) || merge_result.merged !== true) {
+    const message = '自动合并失败：GitHub 未返回 merged=true，请维护者手动检查。'
+    println(`::warning::${message}`)
+    await post_comment_safely(repo, pr_number, `## 🤖 所有者批准\n\n${message}\n`)
+    return 1
+  }
+
+  await remove_labels_safely(repo, pr_number, foreign_labels(cfg))
+  await post_comment_safely(
+    repo,
+    pr_number,
+    `## 🤖 所有者批准\n\n✅ @${comment_author} 已确认，PR 已 squash 合并。`,
+  )
+  set_output('merged', 'true')
   return 0
 }
 
@@ -1297,6 +1853,7 @@ export async function main(argv = process.argv.slice(2)) {
         owner: { type: 'string' },
         'path-check': { type: 'string' },
         path: { type: 'string', multiple: true },
+        'approve-comment': { type: 'boolean' },
       },
       allowPositionals: true,
       strict: false,
@@ -1325,6 +1882,9 @@ export async function main(argv = process.argv.slice(2)) {
       return 2
     }
     return cmd_path_check(values['path-check'], pathArgs, cfg)
+  }
+  if (values['approve-comment']) {
+    return run_approval()
   }
   return run_ci()
 }

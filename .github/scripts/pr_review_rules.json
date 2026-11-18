@@ -5,5 +5,7 @@
   "max_files_per_pr": 100,
   "ignore_dirs": [],
   "maintainers": [],
+  "foreign_folder_labels": ["跨作者修改"],
+  "approve_commands": ["/approve", "/同意合并"],
   "unknown_fields": "warn"
 }

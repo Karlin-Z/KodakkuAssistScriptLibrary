@@ -1,23 +1,15 @@
-/**
- * 审批流程的本地 mock 测试：不联网，起一个本地 GitHub API 假服务，直接调用
- * pr_review.mjs 的 run_ci / run_approval。
- *
- *     node .github/scripts/tests/approval.mock.mjs
- *
- * 覆盖：跨作者挂起、状态写入、所有者批准、非所有者忽略、未审核版本拒绝、
- * 内容错误不下载、多文件夹拒绝、超大 PR 拒绝、并发合并跳过等。
- */
-
 import http from 'node:http'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const PR_REVIEW = path.resolve(import.meta.dirname, '../pr_review.mjs')
+import type { ChangedFile } from '../pr_review.ts'
+
+const PR_REVIEW = path.resolve(import.meta.dirname, '../pr_review.ts')
 const REVIEW_CONTEXT = 'KodakkuAssist/cross-author-review'
 
-const GUID_MAP = {
+const GUID_MAP: Record<string, string> = {
   'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa': 'Other/seed.cs',
   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb': 'Alice/seed.cs',
   'cccccccc-cccc-cccc-cccc-cccccccccccc': 'Bob/seed.cs',
@@ -30,7 +22,50 @@ const CS_TEMPLATE = `using KodakkuAssist.Script;
 public class MockScript { }
 `
 
-const DEFAULT_PR = {
+/** 模拟 PR */
+interface MockPR {
+  state: string;
+  draft: boolean;
+  merged: boolean;
+  user: { login: string };
+  head: { sha: string };
+  base: { ref: string };
+}
+
+/** 模拟状态 */
+interface MockStatus {
+  context?: string;
+  state?: string;
+  description?: string;
+}
+
+/** 模拟请求 */
+interface MockRequest {
+  method?: string;
+  url?: string;
+  body: string;
+}
+
+/** 测试用例 */
+interface MockCase {
+  runner: () => Promise<number>;
+  files?: ChangedFile[];
+  pr?: Partial<MockPR>;
+  statuses?: MockStatus[];
+  mergeResult?: Record<string, unknown>;
+  mergeStatus?: number;
+  prAuthor?: string;
+  headSha?: string;
+  commentAuthor?: string;
+  commentBody?: string;
+  commentType?: string;
+  expectCode: number;
+  expectOutput?: Record<string, string | undefined>;
+  expectPatterns?: string[];
+  forbidPatterns?: string[];
+}
+
+const DEFAULT_PR: MockPR = {
   state: 'open',
   draft: false,
   merged: false,
@@ -39,16 +74,17 @@ const DEFAULT_PR = {
   base: { ref: 'main' },
 }
 
-const OK_STATUS = { context: REVIEW_CONTEXT, state: 'success', description: 'mock reviewed' }
+const OK_STATUS: MockStatus = { context: REVIEW_CONTEXT, state: 'success', description: 'mock reviewed' }
 
-let requests = []
-let files = []
-let pr = { ...DEFAULT_PR }
-let statusesBySha = { sha1: [OK_STATUS] }
-let mergeResult = { merged: true, sha: 'sha1' }
+let requests: MockRequest[] = []
+let files: ChangedFile[] = []
+let pr: MockPR = { ...DEFAULT_PR }
+let statusesBySha: Record<string, MockStatus[]> = { sha1: [OK_STATUS] }
+let mergeResult: Record<string, unknown> = { merged: true, sha: 'sha1' }
 let mergeStatus = 200
 
-function csForPath(filePath) {
+/** 构造模拟脚本 */
+function csForPath(filePath: string): string {
   const hash = Buffer.from(filePath).toString('hex').padEnd(32, '0').slice(0, 32)
   const guid =
     `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-` +
@@ -56,19 +92,22 @@ function csForPath(filePath) {
   return CS_TEMPLATE.replace('GUID_PLACEHOLDER', guid)
 }
 
-function send(res, code, obj) {
+/** 返回 JSON */
+function send(res: http.ServerResponse, code: number, obj: unknown): void {
   res.writeHead(code, { 'content-type': 'application/json' })
   res.end(JSON.stringify(obj))
 }
 
-function startServer() {
+/** 启动模拟服务 */
+function startServer(): Promise<http.Server> {
   return new Promise((resolve) => {
+    // 模拟路由
     const server = http.createServer((req, res) => {
       let body = ''
-      req.on('data', (chunk) => { body += chunk })
+      req.on('data', (chunk: Buffer) => { body += chunk.toString() })
       req.on('end', () => {
         requests.push({ method: req.method, url: req.url, body })
-        const url = new URL(req.url, 'http://localhost')
+        const url = new URL(req.url ?? '/', 'http://localhost')
 
         if (req.method === 'GET' && url.pathname === '/repos/test/repo/pulls/1/files') {
           const page = Number(url.searchParams.get('page') || '1')
@@ -84,7 +123,7 @@ function startServer() {
           return send(res, 200, statusesBySha[sha] || [])
         }
         if (req.method === 'POST' && url.pathname === '/repos/test/repo/statuses/sha1') {
-          const data = JSON.parse(body || '{}')
+          const data = JSON.parse(body || '{}') as MockStatus
           statusesBySha.sha1 = [
             { context: data.context, state: data.state, description: data.description },
             ...(statusesBySha.sha1 || []),
@@ -134,7 +173,9 @@ function startServer() {
 }
 
 const server = await startServer()
-const port = server.address().port
+const address = server.address()
+if (!address || typeof address === 'string') throw new Error('无法获取 mock 服务端口')
+const port = address.port
 const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'kasl-approval-mock-'))
 
 Object.assign(process.env, {
@@ -147,13 +188,14 @@ Object.assign(process.env, {
   COMMENT_TYPE: 'User',
 })
 
-const prReview = await import(pathToFileURL(PR_REVIEW).href)
+const prReview = (await import(pathToFileURL(PR_REVIEW).href)) as typeof import('../pr_review.ts')
 
-const failures = []
+const failures: string[] = []
 
-function readOutput() {
+/** 读取输出变量 */
+function readOutput(): Record<string, string> {
   const file = process.env.GITHUB_OUTPUT
-  const raw = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
+  const raw = file && fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : ''
   return Object.fromEntries(
     raw.split(/\r?\n/).filter(Boolean).map((line) => {
       const index = line.indexOf('=')
@@ -164,7 +206,8 @@ function readOutput() {
 
 const realStdoutWrite = process.stdout.write.bind(process.stdout)
 
-async function runCase(name, options) {
+/** 执行测试用例 */
+async function runCase(name: string, options: MockCase): Promise<void> {
   files = options.files ?? []
   pr = { ...DEFAULT_PR, ...(options.pr ?? {}) }
   statusesBySha = {
@@ -174,8 +217,8 @@ async function runCase(name, options) {
   mergeStatus = options.mergeStatus ?? 200
   requests = []
 
-  fs.writeFileSync(process.env.GITHUB_OUTPUT, '', 'utf8')
-  fs.writeFileSync(process.env.GITHUB_STEP_SUMMARY, '', 'utf8')
+  fs.writeFileSync(process.env.GITHUB_OUTPUT ?? '', '', 'utf8')
+  fs.writeFileSync(process.env.GITHUB_STEP_SUMMARY ?? '', '', 'utf8')
   Object.assign(process.env, {
     PR_AUTHOR: options.prAuthor ?? 'me',
     PR_HEAD_SHA: options.headSha ?? 'sha1',
@@ -185,26 +228,27 @@ async function runCase(name, options) {
     COMMENT_TYPE: options.commentType ?? 'User',
   })
 
-  // 审核脚本会打印完整报告；测试通过时不需要把报告刷到 CI 日志里
   let captured = ''
-  process.stdout.write = (chunk, encoding, callback) => {
-    captured += chunk
+  process.stdout.write = ((chunk: string | Uint8Array, encoding?: unknown, callback?: unknown) => {
+    captured += typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString('utf8')
     if (typeof encoding === 'function') encoding()
     else if (typeof callback === 'function') callback()
     return true
-  }
-  let code
+  }) as typeof process.stdout.write
+  let code: number
   try {
     code = await options.runner()
   } finally {
     process.stdout.write = realStdoutWrite
   }
+  // 解析输出
   const output = readOutput()
   const combined = requests
     .map((item) => `${item.method} ${item.url}\n${item.body}`)
     .join('\n')
 
-  const problems = []
+  // 问题列表
+  const problems: string[] = []
   if (code !== options.expectCode) problems.push(`exit ${code} != ${options.expectCode}`)
   for (const [key, value] of Object.entries(options.expectOutput ?? {})) {
     if (output[key] !== value) problems.push(`${key}=${output[key]} != ${value}`)
@@ -229,9 +273,6 @@ async function runCase(name, options) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// run_ci
-// ---------------------------------------------------------------------------
 await runCase('缺少 PR_HEAD_SHA：直接拒绝执行', {
   runner: prReview.run_ci,
   files: [{ status: 'added', filename: 'Other/a.cs' }],
@@ -339,9 +380,6 @@ await runCase('审核期间 PR 已合并：不再补发结果', {
   ],
 })
 
-// ---------------------------------------------------------------------------
-// run_approval
-// ---------------------------------------------------------------------------
 await runCase('所有者 /approve：当前 head 已审核，自动合并', {
   runner: prReview.run_approval,
   files: [{ status: 'added', filename: 'Other/a.cs' }],

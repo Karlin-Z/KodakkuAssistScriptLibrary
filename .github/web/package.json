@@ -5,7 +5,7 @@
   "type": "module",
   "description": "KodakkuAssistScriptLibrary 在线脚本索引的展示页面",
   "scripts": {
-    "sync-index": "node scripts/sync-index.mjs",
+    "sync-index": "node scripts/sync-index.ts",
     "predev": "npm run sync-index",
     "dev": "vite",
     "prebuild": "npm run sync-index",
@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.6.6",
     "@vitejs/plugin-vue": "^6.0.9",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",

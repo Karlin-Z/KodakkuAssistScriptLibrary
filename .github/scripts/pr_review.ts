@@ -1,41 +1,17 @@
-/**
- * KodakkuAssistScriptLibrary PR 自动审核。
- *
- * 审核规则（见 README.md）：
- *   1. 修改「以 PR 作者的 GitHub 用户名命名」的第一层文件夹时，校验通过后自动合并；
- *      修改别人文件夹的 PR 不自动合并，留言并 @ 文件夹所有者，等待人工审核；
- *   2. 只允许新增 / 修改 / 删除 .cs 文件（重命名要求两端都是 .cs）；
- *   3. 每个 .cs 必须包含且只包含一处 [ScriptType(...)] 特性，字段合法：
- *      Name / Guid / Version / Author / Repo / DownloadUrl / Note / UpdateInfo / TerritoryIds
- *      对应插件里的 KodakkuAssist.Script.OnlineScriptInfo（Interface/ScriptAttribute.cs）；
- *   4. 跨作者 PR 由文件夹所有者回复 /approve 确认后，重新校验并合并（见 run_approval）；
- *      一个 PR 最多只能修改一个别人的文件夹，同时修改多个直接判为不通过。
- *
- * 零依赖，只用 Node 内置模块；只通过网络 API 读取 PR 内容，从不执行 PR 中的代码，
- * 也不会编译 C#——[ScriptType(...)] 是当作文本解析的（复用 csharp_meta.mjs）。
- *
- * 由 pr_review.py 移植而来（Python 版已随迁移移除）；除跨作者改动改为人工审核外，
- * 其余行为与错误文案保持不变。
- */
-
 import fs from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
 import { parseArgs } from 'node:util'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
-import { extractScriptType, pyRepr } from './csharp_meta.mjs'
+import { extractScriptType, pyRepr } from './csharp_meta.ts'
+import type { DecodedValue, ScriptTypeParams } from './csharp_meta.ts'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.dirname(path.dirname(SCRIPT_DIR))
 
 const CONFIG_PATH = path.join(SCRIPT_DIR, 'pr_review_rules.json')
 
-// --------------------------------------------------------------------------- //
-// 规则常量
-// --------------------------------------------------------------------------- //
-
-/** 生成的 OnlineRepo.json 里允许出现的字段 */
 export const ALLOWED_FIELDS = new Set([
   'Name', 'Guid', 'Version', 'Author', 'Repo',
   'DownloadUrl', 'Note', 'UpdateInfo', 'UpdateTime', 'TerritoryIds',
@@ -44,19 +20,13 @@ const REQUIRED_STRING_FIELDS = ['Name', 'Guid', 'Version', 'Author', 'DownloadUr
 const OPTIONAL_STRING_FIELDS = ['Repo', 'Note', 'UpdateInfo', 'UpdateTime']
 const NON_EMPTY_FIELDS = ['Name', 'Guid', 'Version', 'Author']
 
-// 插件用 NuGetVersion 解析 Version（ScriptManager.cs / ScriptBrowserColumn.cs），
-// 非法值会在 UI 渲染时抛异常，因此这里按 NuGet 版本号格式校验。
-// Python 的 \d 是 Unicode 感知的（等价于 \p{Nd}），这里用 \p{Nd} 保持等价。
 const VERSION_RE = /^[\p{Nd}]+(\.[\p{Nd}]+){0,3}(-[0-9A-Za-z.\-]+)?(\+[0-9A-Za-z.\-]+)?$/u
 const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
 const URL_RE = /^https?:\/\/[^\s]+$/
-// merge_repos 写入的 UpdateTime（UTC ISO8601），由 .cs 的最后提交时间生成
 const UPDATE_TIME_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$/
 
-// OnlineScriptInfo.TerritoryIds 是 HashSet<uint>
 export const UINT_MAX = 0xFFFFFFFF
 
-// Name / Author 会被插件拼成保存文件名（"Name_Author.cs"），必须能安全用作文件名
 const INVALID_FILENAME_CHARS = new Set('<>:"/\\|?*'.split(''))
 const WINDOWS_RESERVED_NAMES = new Set([
   'CON', 'PRN', 'AUX', 'NUL',
@@ -64,42 +34,145 @@ const WINDOWS_RESERVED_NAMES = new Set([
   ...Array.from({ length: 9 }, (_, i) => `LPT${i + 1}`),
 ])
 
-// C# 侧 author 参数的默认值，等同于「没写作者」
 const AUTHOR_DEFAULT = 'Unknown'
 const NAME_DEFAULT = 'Default Script'
 const VERSION_DEFAULT = '0.0.0.1'
 
-// 已提交的 guid -> 源文件 映射（由 merge_repos.mjs 生成），用于 PR 阶段查重
 export const GUID_MAP_PATH = '.github/index/guid-map.json'
 
-// 跨作者 PR 在当前 head 上留下的审核状态；/approve 只认这个状态对应的提交
 export const REVIEW_STATUS_CONTEXT = 'KodakkuAssist/cross-author-review'
 
-// 单个文件大小上限
 const MAX_FILE_BYTES = 2 * 1024 * 1024
 
-export const DEFAULT_CONFIG = {
-  // 用户名与文件夹名比较时是否忽略大小写（GitHub 用户名本身不区分大小写）
+/** API 地址 */
+const API_URL = process.env.GITHUB_API_URL ?? 'https://api.github.com'
+
+/** GitHub 用户名 */
+const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
+
+/** 审核配置 */
+export interface ReviewConfig {
+  /** 用户名忽略大小写 */
+  username_case_insensitive: boolean;
+  /** 允许子目录 */
+  allow_subfolders: boolean;
+  /** 允许扩展名 */
+  allowed_extensions: string[];
+  /** 单 PR 文件上限 */
+  max_files_per_pr: number;
+  /** 忽略目录 */
+  ignore_dirs: string[];
+  /** 维护者白名单 */
+  maintainers: string[];
+  /** 跨作者标签 */
+  foreign_folder_labels: string[];
+  /** 批准命令 */
+  approve_commands: string[];
+  /** 未知字段策略 */
+  unknown_fields: 'warn' | 'error' | 'ignore';
+}
+
+/** 脚本信息 */
+export interface ScriptMeta {
+  guid: string;
+  name: string;
+  version: string;
+  author: string;
+  note: string;
+  update_info: string;
+  territorys: number[];
+}
+
+/** 校验结果 */
+export interface ValidationResult {
+  meta: ScriptMeta | null;
+  errors: string[];
+  warnings: string[];
+}
+
+/** 改动文件 */
+export interface ChangedFile {
+  filename?: string;
+  status?: string;
+  previous_filename?: string | null;
+  [key: string]: unknown;
+}
+
+/** 跨作者改动 */
+export interface ForeignChange {
+  path: string;
+  folder: string;
+  author?: string;
+  ctx?: string;
+}
+
+/** guid 映射 */
+export type GuidMap = Record<string, string> | Map<string, string>;
+
+/** JSON 值 */
+export type JsonValue =
+  | null
+  | boolean
+  | number
+  | string
+  | bigint
+  | PyFloat
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
+/** 内容响应 */
+export interface GitHubContentInfo {
+  type?: string;
+  size?: number;
+  encoding?: string;
+  content?: string;
+}
+
+/** PR 响应 */
+export interface GitHubPullRequest {
+  state?: string;
+  merged?: boolean;
+  draft?: boolean;
+  user?: { login?: string };
+  head?: { sha?: string };
+  base?: { ref?: string };
+}
+
+/** 状态响应 */
+export interface GitHubStatus {
+  context?: string;
+  state?: string;
+}
+
+/** 合并响应 */
+export interface GitHubMergeResult {
+  merged?: boolean;
+}
+
+/** 审核结果 */
+export interface ReviewOutcome {
+  files: ChangedFile[] | null;
+  errors: string[];
+  warnings: string[];
+  rows: Array<[string, string]>;
+  foreign: ForeignChange[];
+  known_folders: Set<string>;
+  api_error: string | null;
+}
+
+export const DEFAULT_CONFIG: ReviewConfig = {
   username_case_insensitive: true,
-  // 是否允许在 <用户名>/ 下再建子目录
   allow_subfolders: true,
-  // 贡献者文件夹里允许的文件扩展名
   allowed_extensions: ['.cs'],
-  // 单个 PR 允许改动的文件数上限
   max_files_per_pr: 100,
-  // 不参与索引的目录名（任意层级匹配），例如放模板的 examples / templates
   ignore_dirs: [],
-  // 白名单账号：列表中的登录名不受「只能改自己文件夹」限制（仍会校验内容）。默认空。
   maintainers: [],
-  // 修改别人文件夹的 PR 会打上这些标签，等待文件夹所有者或维护者人工合并
   foreign_folder_labels: ['跨作者修改'],
-  // 文件夹所有者在 PR 评论里回复其中任一命令，即视为批准合并
   approve_commands: ['/approve', '/同意合并'],
-  // 生成结果（OnlineRepo.json）里出现未知字段时的处理：warn / error / ignore
   unknown_fields: 'warn',
 }
 
-const STATUS_LABEL = {
+const STATUS_LABEL: Record<string, string> = {
   added: '新增',
   modified: '修改',
   removed: '删除',
@@ -109,22 +182,13 @@ const STATUS_LABEL = {
   unchanged: '未变',
 }
 
-// --------------------------------------------------------------------------- //
-// 工具
-// --------------------------------------------------------------------------- //
-
-/** 输出一行到标准输出（对应 Python 的 print）。 */
-function println(text) {
+/** 输出一行 */
+function println(text: unknown): void {
   process.stdout.write(String(text) + '\n')
 }
 
-/**
- * 判断一个码点是否属于 Python str.isspace() 的空白集合。
- *
- * 与 JS 的 \s / trim() 并不完全一致：Python 会去掉 \x1c-\x1f、\x85，却不会去掉
- * \ufeff；JS 恰好相反。这里显式列出，保证与 Python 的 strip() 等价。
- */
-function isPySpace(code) {
+/** Python 空白 */
+function isPySpace(code: number): boolean {
   return (
     (code >= 0x09 && code <= 0x0d) ||
     (code >= 0x1c && code <= 0x1f) ||
@@ -135,18 +199,18 @@ function isPySpace(code) {
   )
 }
 
-/** 复刻 Python 的 str.strip()（无参数，按 str.isspace() 判定）。 */
-function pyStrip(text) {
+/** Python 去空白 */
+function pyStrip(text: string): string {
   const chars = Array.from(text)
   let start = 0
   let end = chars.length
-  while (start < end && isPySpace(chars[start].codePointAt(0))) start += 1
-  while (end > start && isPySpace(chars[end - 1].codePointAt(0))) end -= 1
+  while (start < end && isPySpace(chars[start].codePointAt(0) ?? 0)) start += 1
+  while (end > start && isPySpace(chars[end - 1].codePointAt(0) ?? 0)) end -= 1
   return chars.slice(start, end).join('')
 }
 
-/** 复刻 Python 的 repr()，覆盖这里会遇到的取值类型（字符串走 csharp_meta.pyRepr）。 */
-function pyReprAny(value) {
+/** 模拟 repr */
+function pyReprAny(value: unknown): string {
   if (typeof value === 'string') return pyRepr(value)
   if (value === null || value === undefined) return 'None'
   if (typeof value === 'boolean') return value ? 'True' : 'False'
@@ -158,30 +222,22 @@ function pyReprAny(value) {
   return pyRepr(String(value))
 }
 
-/** 复刻 Python 的 float repr（仅用于极少数错误文案，保持基本格式）。 */
-export function pyFloatRepr(value) {
+/** 浮点 repr */
+export function pyFloatRepr(value: number): string {
   if (Number.isNaN(value)) return 'nan'
   if (value === Infinity) return 'inf'
   if (value === -Infinity) return '-inf'
   if (Number.isInteger(value)) {
-    // Python repr(1.0) == '1.0'
     return Object.is(value, -0) ? '-0.0' : `${value}.0`
   }
   return String(value)
 }
 
-/**
- * JSON 里写成小数形态的值（`0.0`、`1e3` 这种）。
- *
- * 必须和整数区分开：Python 的 `0.0` 是 float，校验时按「小数」拒绝；而 JS 的 Number
- * 分不出 `0.0` 与 `0`，`Number.isInteger(0.0)` 仍为 true，会让非法的 `TerritoryIds: [1.0]`
- * 被当成合法整数放行。用 Number 子类承载即可：比较与算术走 valueOf 与数值一致，
- * 但 typeof 是 object，于是整数类型检查会正确地判它不合法。
- */
+/** 小数标记 */
 export class PyFloat extends Number {}
 
-/** 把 JS/Python 类型翻译成中文，便于写错误信息（对应 type_name）。 */
-export function type_name(value) {
+/** 类型中文名 */
+export function type_name(value: unknown): string {
   if (value === null || value === undefined) return 'null'
   if (value instanceof PyFloat) return '小数'
   const t = typeof value
@@ -194,63 +250,59 @@ export function type_name(value) {
   return t
 }
 
-/** 返回默认配置的深拷贝。 */
-export function default_config() {
+/** 默认配置 */
+export function default_config(): ReviewConfig {
   return structuredClone(DEFAULT_CONFIG)
 }
 
-/** 返回默认配置的深拷贝（merge_repos / selftest 契约名）。 */
-export function defaultConfig() {
+/** 默认配置 */
+export function defaultConfig(): ReviewConfig {
   return default_config()
 }
 
-/** 读取 pr_review_rules.json，覆盖默认配置；文件缺失或损坏时退回默认值。 */
-export function load_config() {
+/** 读取配置 */
+export function load_config(): ReviewConfig {
   const cfg = default_config()
-  let raw
+  // 读取文件
+  let raw: string
   try {
     raw = fs.readFileSync(CONFIG_PATH, 'utf8')
   } catch (err) {
-    if (err && err.code === 'ENOENT') return cfg
+    if (err && (err as NodeJS.ErrnoException).code === 'ENOENT') return cfg
     println(`::warning::无法读取审核规则配置 ${CONFIG_PATH}: ${pyOsErrorString(err)}`)
     return cfg
   }
   try {
     const user_cfg = pyJsonLoads(raw)
-    if (isPlainObject(user_cfg)) Object.assign(cfg, user_cfg)
+    // 合并配置
+    if (isPlainObject(user_cfg)) Object.assign(cfg, user_cfg as Partial<ReviewConfig>)
   } catch (err) {
     println(`::warning::无法读取审核规则配置 ${CONFIG_PATH}: ${err}`)
   }
   return cfg
 }
 
-/** load_config 的契约名。 */
-export function loadConfig() {
+/** 读取配置 */
+export function loadConfig(): ReviewConfig {
   return load_config()
 }
 
-/** 规范化登录名以便比较；GitHub 用户名本身不区分大小写。 */
-export function normalize_login(login, case_insensitive) {
+/** 规范化用户名 */
+export function normalize_login(login: string | null | undefined, case_insensitive: boolean): string {
   const text = pyStrip(login || '')
   return case_insensitive ? text.toLowerCase() : text
 }
 
-/** 对应 Python 的 str.rstrip(" .")：去掉结尾的空格与点。 */
-function rstripSpaceDot(text) {
+/** 去尾部空格点 */
+function rstripSpaceDot(text: string): string {
   let end = text.length
   while (end > 0 && (text[end - 1] === ' ' || text[end - 1] === '.')) end -= 1
   return text.slice(0, end)
 }
 
-/**
- * Name / Author 会被插件拼成保存文件名：
- *
- *     Path.Combine(saveFolder, $"{info.Name}_{info.Author}.cs")   # ScriptManager.cs
- *
- * 含路径分隔符或 `..` 时可能写到 ScriptCache 目录之外，含非法字符时直接失败。
- */
-export function check_filename_component(value, label, errors) {
-  if (Array.from(value).some((ch) => ch.codePointAt(0) < 32)) {
+/** 校验文件名 */
+export function check_filename_component(value: string, label: string, errors: string[]): void {
+  if (Array.from(value).some((ch) => (ch.codePointAt(0) ?? 0) < 32)) {
     errors.push(`${label} 含有控制字符，不能用作文件名`)
   }
   const bad = Array.from(new Set(Array.from(value).filter((ch) => INVALID_FILENAME_CHARS.has(ch)))).sort()
@@ -271,27 +323,27 @@ export function check_filename_component(value, label, errors) {
   }
 }
 
-// --------------------------------------------------------------------------- //
-// 规则 1 + 2：路径校验
-// --------------------------------------------------------------------------- //
-
-/**
- * 校验单个路径是否满足「自己的文件夹 / 只允许指定扩展名」两条规则。
- *
- * foreign 为数组时，修改别人文件夹不再算错误，而是记进 foreign 等待人工审核；
- * 不传 foreign（本地检查 / 旧调用）时仍按错误处理。
- */
-export function check_path_rules(filePath, author, cfg, errors, ctx, foreign = null) {
+/** 校验路径规则 */
+export function check_path_rules(
+  filePath: unknown,
+  author: string,
+  cfg: ReviewConfig,
+  errors: string[],
+  ctx: string,
+  foreign: ForeignChange[] | null = null,
+): void {
   if (typeof filePath !== 'string' || !filePath) {
     errors.push(`${ctx}：路径为空或非法`)
     return
   }
 
+  // 路径格式
   if (filePath.startsWith('/') || filePath.includes('\\')) {
     errors.push(`${ctx}：${pyReprAny(filePath)} 不是合法的仓库相对路径`)
     return
   }
 
+  // 路径片段
   const parts = filePath.split('/')
   if (parts.some((part) => part === '' || part === '.' || part === '..')) {
     errors.push(`${ctx}：${pyReprAny(filePath)} 包含非法路径片段`)
@@ -308,7 +360,6 @@ export function check_path_rules(filePath, author, cfg, errors, ctx, foreign = n
 
   const folder = parts[0]
   if (folder.startsWith('.') || folder.startsWith('_')) {
-    // .github / _site 这类目录不是贡献者文件夹，不能当作「跨作者修改」放行
     errors.push(`${ctx}：${pyReprAny(folder)}/ 不是贡献者文件夹，不能修改`)
   } else {
     const same = normalize_login(folder, cfg.username_case_insensitive) ===
@@ -325,10 +376,12 @@ export function check_path_rules(filePath, author, cfg, errors, ctx, foreign = n
     }
   }
 
+  // 子目录限制
   if (!(cfg.allow_subfolders ?? true) && parts.length > 2) {
     errors.push(`${ctx}：不允许在 ${folder}/ 下创建子文件夹（${pyReprAny(filePath)}）`)
   }
 
+  // 扩展名限制
   const extensions = (cfg.allowed_extensions ?? ['.cs']).map((e) => String(e).toLowerCase())
   const filename = parts[parts.length - 1]
   const filenameLower = filename.toLowerCase()
@@ -339,35 +392,45 @@ export function check_path_rules(filePath, author, cfg, errors, ctx, foreign = n
   }
 }
 
-/** 契约名：就地往 collected 数组里 push 错误字符串。 */
-export function checkPathRules(filePath, author, cfg, collected, label, foreign = null) {
+/** 校验路径规则 */
+export function checkPathRules(
+  filePath: string,
+  author: string,
+  cfg: ReviewConfig,
+  collected: string[],
+  label: string,
+  foreign: ForeignChange[] | null = null,
+): void {
   check_path_rules(filePath, author, cfg, collected, label, foreign)
 }
 
-// --------------------------------------------------------------------------- //
-// 规则 3：.cs 里的 ScriptType 特性
-// --------------------------------------------------------------------------- //
-
-/** 从 params 里取 [kind, value]，缺失时等价于 Python 的 (None, None)。 */
-function getParam(params, key) {
+/** 取参数值 */
+function getParam(params: ScriptTypeParams, key: string): DecodedValue | [null, null] {
   return Object.hasOwn(params, key) ? params[key] : [null, null]
 }
 
-/** 校验一个 .cs 文件，返回 [meta, errors, warnings]。有错误时 meta 为 None。 */
-export function validate_script_file(text, rel_path, folder_owner, cfg) {
-  const errors = []
-  const warnings = []
+/** 校验 .cs 文件 */
+export function validate_script_file(
+  text: string,
+  rel_path: string,
+  folder_owner: string,
+  cfg: ReviewConfig,
+): [ScriptMeta | null, string[], string[]] {
+  const errors: string[] = []
+  const warnings: string[] = []
 
-  const err = (msg) => errors.push(`${rel_path}：${msg}`)
-  const warn = (msg) => warnings.push(`${rel_path}：${msg}`)
+  /** 记录错误 */
+  const err = (msg: string): number => errors.push(`${rel_path}：${msg}`)
+  /** 记录提醒 */
+  const warn = (msg: string): number => warnings.push(`${rel_path}：${msg}`)
 
+  // 解析特性
   const { params, errors: parse_errors } = extractScriptType(text)
   if (parse_errors.length) {
     for (const item of parse_errors) err(item)
     return [null, errors, warnings]
   }
 
-  // 参数值解析不出来时直接报原文，避免后面用「实际是null」这类看不懂的措辞
   for (const [field, entry] of Object.entries(params)) {
     const [kind, value] = entry
     if (kind === 'unknown') {
@@ -393,7 +456,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
   }
   if (errors.length) return [null, errors, warnings]
 
-  // guid：构造函数第一个参数，没有默认值
+  // guid 参数
   let guid = ''
   {
     const [kind, value] = getParam(params, 'guid')
@@ -408,7 +471,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // name
+  // name 参数
   let name = NAME_DEFAULT
   {
     const [kind, value] = getParam(params, 'name')
@@ -423,7 +486,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // version
+  // version 参数
   let version = VERSION_DEFAULT
   {
     const [kind, value] = getParam(params, 'version')
@@ -441,7 +504,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // author：未写或写成默认值 Unknown 时，回退到文件夹名（即 GitHub 用户名）
+  // author 参数
   let author = ''
   {
     const [kind, value] = getParam(params, 'author')
@@ -463,8 +526,8 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // territorys
-  const territorys = []
+  // 地图参数
+  const territorys: number[] = []
   {
     const [kind, value] = getParam(params, 'territorys')
     if (kind === null) {
@@ -474,7 +537,8 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     } else if (kind !== 'array') {
       err(`territorys 必须是 uint 数组字面量，实际是${type_name(value)}`)
     } else {
-      value.forEach((tid, pos) => {
+      const items = value as readonly number[]
+      items.forEach((tid, pos) => {
         if (
           typeof tid === 'boolean' ||
           !(typeof tid === 'bigint' || (typeof tid === 'number' && Number.isInteger(tid))) ||
@@ -488,7 +552,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // note / updateInfo
+  // note 参数
   let note = ''
   {
     const [kind, value] = getParam(params, 'note')
@@ -499,6 +563,7 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
+  // 更新参数
   let update_info = ''
   {
     const [kind, value] = getParam(params, 'updateInfo')
@@ -509,7 +574,6 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
     }
   }
 
-  // 插件用 "{Name}_{Author}.cs" 作为保存文件名
   if (pyStrip(name)) {
     check_filename_component(name, `${rel_path} 的 name`, errors)
   }
@@ -534,25 +598,30 @@ export function validate_script_file(text, rel_path, folder_owner, cfg) {
   }, errors, warnings]
 }
 
-/** 契约名：返回对象 {meta, errors, warnings}。 */
-export function validateScriptFile(text, relPath, owner, cfg) {
+/** 校验 .cs 文件 */
+export function validateScriptFile(
+  text: string,
+  relPath: string,
+  owner: string,
+  cfg: ReviewConfig,
+): ValidationResult {
   const [meta, errors, warnings] = validate_script_file(text, relPath, owner, cfg)
   return { meta, errors, warnings }
 }
 
-// --------------------------------------------------------------------------- //
-// 生成的 OnlineRepo.json 自检
-// --------------------------------------------------------------------------- //
-
-/** 判断是否为普通对象（对应 Python 的 isinstance(x, dict)，不含数组 / null）。 */
-function isPlainObject(value) {
+/** 判断普通对象 */
+function isPlainObject(value: unknown): value is Record<string, JsonValue> {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
-/** 校验生成出来的 OnlineRepo.json（OnlineScriptInfo 数组），返回 [errors, warnings]。 */
-export function validate_json_document(text, jsonPath, cfg) {
-  const errors = []
-  const warnings = []
+/** 校验索引文档 */
+export function validate_json_document(
+  text: string,
+  jsonPath: string,
+  cfg: ReviewConfig,
+): [string[], string[]] {
+  const errors: string[] = []
+  const warnings: string[] = []
 
   if (text.startsWith('\ufeff')) {
     warnings.push(`${jsonPath}：文件带有 UTF-8 BOM，已忽略`)
@@ -564,12 +633,14 @@ export function validate_json_document(text, jsonPath, cfg) {
     return [errors, warnings]
   }
 
-  let data
+  let data: JsonValue
   try {
+    // 解析 JSON
     data = pyJsonLoads(text)
   } catch (exc) {
+    const error = exc as PyJsonDecodeError
     errors.push(
-      `${jsonPath}：JSON 语法错误 —— ${exc.msg}（第 ${exc.lineno} 行第 ${exc.colno} 列）`
+      `${jsonPath}：JSON 语法错误 —— ${error.msg}（第 ${error.lineno} 行第 ${error.colno} 列）`
     )
     return [errors, warnings]
   }
@@ -583,6 +654,7 @@ export function validate_json_document(text, jsonPath, cfg) {
     warnings.push(`${jsonPath}：顶层数组为空，没有任何脚本条目`)
   }
 
+  // 去重表
   const guid_seen = new Map()
   const name_seen = new Map()
   data.forEach((entry, idx) => {
@@ -591,14 +663,27 @@ export function validate_json_document(text, jsonPath, cfg) {
   return [errors, warnings]
 }
 
-/** 契约名：返回对象 {errors, warnings}。 */
-export function validateJsonDocument(text, filename, cfg) {
+/** 校验索引文档 */
+export function validateJsonDocument(
+  text: string,
+  filename: string,
+  cfg: ReviewConfig,
+): { errors: string[]; warnings: string[] } {
   const [errors, warnings] = validate_json_document(text, filename, cfg)
   return { errors, warnings }
 }
 
-/** 校验生成结果里的单个条目，并把 guid / name 记入去重表。 */
-export function validate_entry(idx, entry, jsonPath, cfg, errors, warnings, guid_seen, name_seen) {
+/** 校验单个条目 */
+export function validate_entry(
+  idx: number,
+  entry: JsonValue,
+  jsonPath: string,
+  cfg: ReviewConfig,
+  errors: string[],
+  warnings: string[],
+  guid_seen: Map<string, number>,
+  name_seen: Map<string, number>,
+): void {
   const label = `${jsonPath}[${idx}]`
 
   if (!isPlainObject(entry)) {
@@ -654,7 +739,6 @@ export function validate_entry(idx, entry, jsonPath, cfg, errors, warnings, guid
     }
   }
 
-  // TerritoryIds 可以省略，等同于空数组（脚本在所有区域生效）
   const territory_ids = entry.TerritoryIds
   if (territory_ids !== null && territory_ids !== undefined && !Array.isArray(territory_ids)) {
     errors.push(
@@ -662,9 +746,10 @@ export function validate_entry(idx, entry, jsonPath, cfg, errors, warnings, guid
     )
   } else if (Array.isArray(territory_ids)) {
     territory_ids.forEach((tid, pos) => {
-      if (typeof tid === 'boolean' || !(typeof tid === 'bigint' || (typeof tid === 'number' && Number.isInteger(tid)))) {
+      const integer = typeof tid === 'bigint' || (typeof tid === 'number' && Number.isInteger(tid))
+      if (!integer) {
         errors.push(`${label}：TerritoryIds[${pos}] 必须是整数，实际是${type_name(tid)}`)
-      } else if (!(0 <= tid && tid <= UINT_MAX)) {
+      } else if (!(0 <= (tid as number | bigint) && (tid as number | bigint) <= UINT_MAX)) {
         errors.push(`${label}：TerritoryIds[${pos}] = ${tid} 超出 uint 范围`)
       }
     })
@@ -697,16 +782,10 @@ export function validate_entry(idx, entry, jsonPath, cfg, errors, warnings, guid
   }
 }
 
-// --------------------------------------------------------------------------- //
-// GitHub API
-// --------------------------------------------------------------------------- //
-
-const API_URL = process.env.GITHUB_API_URL ?? 'https://api.github.com'
-
-/** 构造 GitHub API 请求头，带 token 时附带 Authorization。 */
-function _api_headers(accept) {
+/** 构造请求头 */
+function _api_headers(accept: string): Record<string, string> {
   const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''
-  const headers = {
+  const headers: Record<string, string> = {
     Accept: accept,
     'X-GitHub-Api-Version': '2022-11-28',
     'User-Agent': 'kasl-pr-reviewer',
@@ -717,8 +796,8 @@ function _api_headers(accept) {
   return headers
 }
 
-/** 对应 urllib.parse.quote，保留 safe 里的字符。 */
-function pyQuote(text, safe = '') {
+/** URL 编码 */
+function pyQuote(text: string, safe = ''): string {
   const unreserved = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_.-~'
   let out = ''
   for (const ch of text) {
@@ -733,28 +812,35 @@ function pyQuote(text, safe = '') {
   return out
 }
 
-/** HTTP 错误（对应 urllib.error.HTTPError）。 */
+/** HTTP 错误 */
 class HttpError extends Error {
-  constructor(status, statusText) {
+  code: number
+
+  /** 构造函数 */
+  constructor(status: number, statusText: string) {
     super(`HTTP Error ${status}: ${statusText}`)
     this.name = 'HTTPError'
     this.code = status
   }
 }
 
-/** GET 一个 API 路径并解析 JSON。 */
-async function api_json(api_path) {
+/** 请求 JSON */
+async function api_json<T = JsonValue>(api_path: string): Promise<T | null> {
   const response = await fetch(`${API_URL}${api_path}`, {
     headers: _api_headers('application/vnd.github+json'),
     signal: AbortSignal.timeout(30000),
   })
   if (!response.ok) throw new HttpError(response.status, response.statusText)
   const body = Buffer.from(await response.arrayBuffer())
-  return body.length ? pyJsonLoads(body.toString('utf8')) : null
+  return body.length ? (pyJsonLoads(body.toString('utf8')) as T) : null
 }
 
-/** 向 API 发送带 JSON body 的请求（POST / DELETE 等），返回解析后的 JSON 或 null。 */
-async function api_send(method, api_path, body) {
+/** 发送 API 请求 */
+async function api_send<T = JsonValue>(
+  method: string,
+  api_path: string,
+  body?: unknown,
+): Promise<T | null> {
   const headers = _api_headers('application/vnd.github+json')
   if (body !== undefined) headers['Content-Type'] = 'application/json'
   const response = await fetch(`${API_URL}${api_path}`, {
@@ -765,11 +851,11 @@ async function api_send(method, api_path, body) {
   })
   if (!response.ok) throw new HttpError(response.status, response.statusText)
   const bytes = Buffer.from(await response.arrayBuffer())
-  return bytes.length ? pyJsonLoads(bytes.toString('utf8')) : null
+  return bytes.length ? (pyJsonLoads(bytes.toString('utf8')) as T) : null
 }
 
-/** GET 一个 API 路径并取原始字节。 */
-async function api_raw(api_path) {
+/** 请求原始内容 */
+async function api_raw(api_path: string): Promise<Buffer> {
   const response = await fetch(`${API_URL}${api_path}`, {
     headers: _api_headers('application/vnd.github.raw'),
     signal: AbortSignal.timeout(30000),
@@ -778,20 +864,20 @@ async function api_raw(api_path) {
   return Buffer.from(await response.arrayBuffer())
 }
 
-/**
- * 分页拉取 PR 改动的文件列表。
- *
- * maxFiles 非空时最多保留 maxFiles + 1 个文件就停止翻页：审核只需要知道
- * 「是否超过上限」，没必要为大 PR 翻完几十页。多保留 1 个用于区分「刚好等于上限」。
- */
-export async function list_changed_files(repo, pr_number, maxFiles = null) {
-  // 配置里的整数由 pyJsonLoads 解析成 BigInt，算术前先转成 Number
+/** 拉取改动文件 */
+export async function list_changed_files(
+  repo: string,
+  pr_number: string | number,
+  maxFiles: number | null = null,
+): Promise<ChangedFile[]> {
   const limit = maxFiles === null ? null : Number(maxFiles)
-  const files = []
+  const files: ChangedFile[] = []
   let page = 1
   for (;;) {
-    const batch = await api_json(`/repos/${repo}/pulls/${pr_number}/files?per_page=100&page=${page}`)
-    if (!batch) break
+    const batch = await api_json<ChangedFile[]>(
+      `/repos/${repo}/pulls/${pr_number}/files?per_page=100&page=${page}`,
+    )
+    if (!batch || !Array.isArray(batch)) break
     files.push(...batch)
     if (batch.length < 100) break
     if (limit !== null && files.length > limit) {
@@ -803,8 +889,8 @@ export async function list_changed_files(repo, pr_number, maxFiles = null) {
   return files
 }
 
-/** 对应 Python 的 base64.b64decode：非法内容时抛错（这里近似处理填充）。 */
-function pyB64Decode(text) {
+/** Base64 解码 */
+function pyB64Decode(text: string): Buffer {
   const cleaned = String(text).replace(/[^A-Za-z0-9+/=]/g, '')
   if (cleaned.length % 4 !== 0 || /=/.test(cleaned.slice(0, -2)) || (cleaned.includes('=') && !/=+$/.test(cleaned))) {
     throw new Error('Invalid base64-encoded string')
@@ -812,15 +898,20 @@ function pyB64Decode(text) {
   return Buffer.from(cleaned, 'base64')
 }
 
-/** 读取 PR 中某个文件的原始字节。返回 [data, error_message]。 */
-export async function fetch_file_bytes(repo, filePath, ref) {
+/** 读取文件内容 */
+export async function fetch_file_bytes(
+  repo: string,
+  filePath: string,
+  ref: string,
+): Promise<[Buffer | null, string | null]> {
   const quoted = pyQuote(filePath, '/')
   const ref_q = pyQuote(ref, '')
-  const info = await api_json(`/repos/${repo}/contents/${quoted}?ref=${ref_q}`)
-  if (!isPlainObject(info) || info.type !== 'file') {
-    const kind = isPlainObject(info) ? info.type : type_name(info)
+  const info = await api_json<GitHubContentInfo>(`/repos/${repo}/contents/${quoted}?ref=${ref_q}`)
+  if (!info || typeof info !== 'object' || Array.isArray(info) || info.type !== 'file') {
+    const kind = info && typeof info === 'object' && !Array.isArray(info) ? info.type : type_name(info)
     return [null, `只允许普通文件（不允许符号链接 / 子模块 / 目录），实际类型为 ${kind}`]
   }
+  // 大小限制
   const size = info.size || 0
   if (size > MAX_FILE_BYTES) {
     return [null, `文件过大（${size} 字节，上限 ${MAX_FILE_BYTES} 字节）`]
@@ -832,38 +923,41 @@ export async function fetch_file_bytes(repo, filePath, ref) {
       return [null, `内容解码失败：${exc}`]
     }
   }
-  // 超过 1 MB 时 contents API 不返回 content，改用 raw 媒体类型
+  // 大文件走 raw
   return [await api_raw(`/repos/${repo}/contents/${quoted}?ref=${ref_q}`), null]
 }
 
-/** 读取已提交的 guid -> 源文件 映射。不存在时返回 None（表示本次无法查重）。 */
-export async function load_guid_map(repo, ref) {
+/** 读取 guid 映射 */
+export async function load_guid_map(
+  repo: string,
+  ref: string,
+): Promise<Record<string, string> | null> {
   if (!ref) return null
   const quoted = pyQuote(GUID_MAP_PATH, '/')
-  let info
+  let info: GitHubContentInfo | null
   try {
-    info = await api_json(`/repos/${repo}/contents/${quoted}?ref=${pyQuote(ref, '')}`)
+    info = await api_json<GitHubContentInfo>(`/repos/${repo}/contents/${quoted}?ref=${pyQuote(ref, '')}`)
   } catch (exc) {
     if (exc instanceof HttpError && exc.code === 404) return null
     throw exc
   }
-  if (!isPlainObject(info) || !info.content) return null
-  let data
+  if (!info || typeof info !== 'object' || Array.isArray(info) || !info.content) return null
+  let data: JsonValue
   try {
     data = pyJsonLoads(pyB64Decode(info.content).toString('utf8'))
   } catch {
     return null
   }
   if (!isPlainObject(data)) return null
-  const out = {}
+  const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(data)) {
     out[String(key).toLowerCase()] = String(value)
   }
   return out
 }
 
-/** Python dict / JS Map / 普通对象 的「是否为空」。 */
-function mappingIsEmpty(mapping) {
+/** 判断映射为空 */
+function mappingIsEmpty(mapping: unknown): boolean {
   if (!mapping) return true
   if (mapping instanceof Map) return mapping.size === 0
   if (Array.isArray(mapping)) return mapping.length === 0
@@ -871,15 +965,15 @@ function mappingIsEmpty(mapping) {
   return true
 }
 
-/** Python dict.get(key)（兼容 Map 与普通对象）。 */
-function mappingGet(mapping, key) {
+/** 读取映射值 */
+function mappingGet(mapping: GuidMap | null | undefined, key: string): string | undefined {
   if (!mapping) return undefined
   if (mapping instanceof Map) return mapping.get(key)
   return Object.hasOwn(mapping, key) ? mapping[key] : undefined
 }
 
-/** 判断 own_paths（set）里是否包含 path。 */
-function ownPathsHas(own_paths, candidate) {
+/** 判断路径存在 */
+function ownPathsHas(own_paths: unknown, candidate: string): boolean {
   if (!own_paths) return false
   if (own_paths instanceof Set) return own_paths.has(candidate)
   if (Array.isArray(own_paths)) return own_paths.includes(candidate)
@@ -887,17 +981,17 @@ function ownPathsHas(own_paths, candidate) {
   return false
 }
 
-/**
- * 检查 guid 是否与已有脚本或同一 PR 内的其它文件冲突。
- *
- * script_guids: [[路径, guid]]
- * own_paths:    本次 PR 涉及的全部路径（含重命名前路径），用于放行改名/移动
- * guid_map:     已有的 guid -> 源文件；None 表示拿不到、本次不查重
- */
-export function check_guid_collisions(script_guids, own_paths, author, guid_map, cfg) {
-  const errors = []
+/** 检查 guid 冲突 */
+export function check_guid_collisions(
+  script_guids: Array<[string, string]>,
+  own_paths: unknown,
+  author: string,
+  guid_map: GuidMap | null,
+  cfg: ReviewConfig,
+): string[] {
+  const errors: string[] = []
 
-  const seen = new Map()
+  const seen = new Map<string, string>()
   for (const [scriptPath, guid] of script_guids) {
     const key = guid.toLowerCase()
     if (seen.has(key)) {
@@ -916,7 +1010,6 @@ export function check_guid_collisions(script_guids, own_paths, author, guid_map,
 
   for (const [scriptPath, guid] of script_guids) {
     const mapped = mappingGet(guid_map, guid.toLowerCase())
-    // mapped in own_paths：作者在改名 / 移动自己的文件，不算冲突
     if (!mapped || mapped === scriptPath || ownPathsHas(own_paths, mapped)) {
       continue
     }
@@ -938,28 +1031,33 @@ export function check_guid_collisions(script_guids, own_paths, author, guid_map,
   return errors
 }
 
-/** 契约名。 */
-export function checkGuidCollisions(entries, renamedFiles, author, guidMap, cfg) {
+/** 检查 guid 冲突 */
+export function checkGuidCollisions(
+  entries: Array<[string, string]>,
+  renamedFiles: unknown,
+  author: string,
+  guidMap: GuidMap | null,
+  cfg: ReviewConfig,
+): string[] {
   return check_guid_collisions(entries, renamedFiles, author, guidMap, cfg)
 }
 
-// --------------------------------------------------------------------------- //
-// 审核主流程
-// --------------------------------------------------------------------------- //
-
-/** 路径层面校验。返回 [errors, warnings, rows, foreign]。 */
-export function check_change_set(files, author, cfg) {
-  const errors = []
-  const warnings = []
-  const rows = []
-  const foreign = []
+/** 校验改动集合 */
+export function check_change_set(
+  files: ChangedFile[],
+  author: string,
+  cfg: ReviewConfig,
+): [string[], string[], Array<[string, string]>, ForeignChange[]] {
+  const errors: string[] = []
+  const warnings: string[] = []
+  const rows: Array<[string, string]> = []
+  const foreign: ForeignChange[] = []
 
   const max_files = cfg.max_files_per_pr ?? 100
   if (files.length > max_files) {
     errors.push(`本 PR 改动了 ${files.length} 个文件，超过上限 ${max_files} 个`)
   }
 
-  // 文件夹名如果被 ignore_dirs 排除，PR 通过也永远不会被收录，提前说清楚
   const ignore_dirs = new Set((cfg.ignore_dirs || []).map((d) => normalize_login(String(d), true)))
   if (ignore_dirs.has(normalize_login(author, true))) {
     errors.push(
@@ -985,7 +1083,6 @@ export function check_change_set(files, author, cfg) {
       check_path_rules(filePath, author, cfg, errors, `文件 ${filePath}`, foreign)
     }
 
-    // 重命名 / 复制：来源路径同样必须合法，否则等于绕过限制
     if ((status === 'renamed' || status === 'copied') && previous) {
       const prefix = status === 'renamed' ? '重命名前' : '复制来源'
       rows.push([`${label}（来源）`, previous])
@@ -995,8 +1092,6 @@ export function check_change_set(files, author, cfg) {
     }
   }
 
-  // 一个 PR 只允许改一个别人的文件夹；同时改多个会直接判定为不通过，
-  // 避免出现「多个所有者都要批准」的僵局。重命名跨两个作者文件夹也按此处理。
   const foreign_dirs = foreign_folders(foreign)
   if (foreign_dirs.length > 1) {
     errors.push(
@@ -1008,16 +1103,22 @@ export function check_change_set(files, author, cfg) {
   return [errors, warnings, rows, foreign]
 }
 
-/** 契约名：返回对象 {errors, warnings, rows, foreign}。 */
-export function checkChangeSet(files, author, cfg) {
+/** 校验改动集合 */
+export function checkChangeSet(
+  files: ChangedFile[],
+  author: string,
+  cfg: ReviewConfig,
+): { errors: string[]; warnings: string[]; rows: Array<[string, string]>; foreign: ForeignChange[] } {
   const [errors, warnings, rows, foreign] = check_change_set(files, author, cfg)
   return { errors, warnings, rows, foreign }
 }
 
-/** 跨作者改动涉及的文件夹（大小写不敏感去重，保留首次出现的写法）。 */
-export function foreign_folders(foreign) {
-  const folders = []
-  const seen = new Set()
+/** 跨作者文件夹 */
+export function foreign_folders(
+  foreign: ReadonlyArray<{ folder?: string }> | null | undefined,
+): string[] {
+  const folders: string[] = []
+  const seen = new Set<string>()
   for (const item of foreign || []) {
     const folder = String(item.folder || '')
     if (!folder) continue
@@ -1030,14 +1131,12 @@ export function foreign_folders(foreign) {
   return folders
 }
 
-// GitHub 用户名只允许字母、数字和连字符；文件夹名来自 PR，@ 前必须过滤，
-// 避免把 `@all` / 换行之类的路径片段拼进评论。
-const GITHUB_LOGIN_RE = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$/
-
-/** 跨作者改动涉及的文件夹所有者（支持 `作者a & 作者b` 联合作者格式）。 */
-export function foreign_owners(foreign) {
-  const owners = []
-  const seen = new Set()
+/** 跨作者所有者 */
+export function foreign_owners(
+  foreign: ReadonlyArray<{ folder?: string }> | null | undefined,
+): string[] {
+  const owners: string[] = []
+  const seen = new Set<string>()
   for (const item of foreign || []) {
     for (const part of String(item.folder || '').split(/[&＆]/)) {
       const owner = part.trim()
@@ -1052,10 +1151,12 @@ export function foreign_owners(foreign) {
   return owners
 }
 
-/** 跨作者改动按路径去重，避免重命名时同一个文件出现两次。 */
-function unique_foreign(foreign) {
-  const seen = new Set()
-  const out = []
+/** 跨作者去重 */
+function unique_foreign(
+  foreign: ReadonlyArray<ForeignChange> | null | undefined,
+): ForeignChange[] {
+  const seen = new Set<string>()
+  const out: ForeignChange[] = []
   for (const item of foreign || []) {
     if (seen.has(item.path)) continue
     seen.add(item.path)
@@ -1064,14 +1165,8 @@ function unique_foreign(foreign) {
   return out
 }
 
-/**
- * 把来自 PR 的文本压成单行，并转义会破坏 Markdown / Actions 命令的字符。
- *
- * Git 文件名可以包含换行和反引号：换行会让 Runner 把下一行当成 `::set-output`
- * 之类的工作流命令，反引号则会打破评论里的代码块。所有路径、文件夹名、错误文案
- * 在进入日志和 PR 评论前都要经过这里。
- */
-function safe_text(value) {
+/** 净化文本 */
+function safe_text(value: unknown): string {
   return String(value ?? '')
     .replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ')
     .replace(/`/g, "'")
@@ -1079,18 +1174,23 @@ function safe_text(value) {
     .replace(/::/g, ': :')
 }
 
-/** 用安全的行内代码包住路径 / 文件夹名。 */
-function safe_code(value) {
+/** 行内代码 */
+function safe_code(value: unknown): string {
   return `\`${safe_text(value)}\``
 }
 
-/** 输出到 Actions 日志前再兜一层：任何行首的命令前缀都转义掉。 */
-function safe_stdout(text) {
+/** 净化日志 */
+function safe_stdout(text: unknown): string {
   return String(text).replace(/^::/gm, '\\::').replace(/^##\[/gm, '\\##[')
 }
 
-/** 生成报告正文：改动清单 + 错误 + 提醒 + 跨作者改动。 */
-export function describe(files, errors, warnings, foreign = []) {
+/** 生成报告正文 */
+export function describe(
+  files: ReadonlyArray<readonly [string, string]>,
+  errors: string[],
+  warnings: string[],
+  foreign: ReadonlyArray<ForeignChange> = [],
+): string {
   const lines = ['### 改动清单', '', '| 状态 | 文件 |', '| --- | --- |']
   for (const [label, filePath] of files) {
     lines.push(`| ${safe_text(label)} | ${safe_code(filePath)} |`)
@@ -1139,25 +1239,35 @@ export function describe(files, errors, warnings, foreign = []) {
   return lines.join('\n')
 }
 
-/** 拼出完整的 PR 评论内容。 */
-export function build_report(title, rows, errors, warnings, foreign = []) {
+/** 生成 PR 评论 */
+export function build_report(
+  title: string,
+  rows: ReadonlyArray<readonly [string, string]>,
+  errors: string[],
+  warnings: string[],
+  foreign: ReadonlyArray<ForeignChange> = [],
+): string {
   return [`## 🤖 PR 自动审核：${title}`, '', describe(rows, errors, warnings, foreign)].join('\n')
 }
 
-/** 追加到 Actions 运行摘要；不在 Actions 环境下静默跳过。 */
-export function write_step_summary(markdown) {
+/** 写运行摘要 */
+export function write_step_summary(markdown: string): void {
   const summary_path = process.env.GITHUB_STEP_SUMMARY
   if (summary_path) {
     try {
       fs.appendFileSync(summary_path, markdown + '\n', 'utf8')
     } catch {
-      // OSError：静默跳过
+      // 忽略
     }
   }
 }
 
-/** 在 PR 下发一条评论。 */
-export async function post_comment(repo, pr_number, body) {
+/** 发表评论 */
+export async function post_comment(
+  repo: string,
+  pr_number: string | number,
+  body: string,
+): Promise<void> {
   const response = await fetch(`${API_URL}/repos/${repo}/issues/${pr_number}/comments`, {
     method: 'POST',
     body: Buffer.from(JSON.stringify({ body }), 'utf8'),
@@ -1168,8 +1278,12 @@ export async function post_comment(repo, pr_number, body) {
   await response.arrayBuffer()
 }
 
-/** 在 PR 下留言；失败只告警，不影响审核结论。 */
-export async function post_comment_safely(repo, pr_number, body) {
+/** 安全发表评论 */
+export async function post_comment_safely(
+  repo: string,
+  pr_number: string | number,
+  body: string,
+): Promise<void> {
   try {
     await post_comment(repo, pr_number, body)
   } catch (exc) {
@@ -1177,51 +1291,50 @@ export async function post_comment_safely(repo, pr_number, body) {
   }
 }
 
-/** 写 GitHub Actions step output；不在 Actions 环境下静默跳过。 */
-export function set_output(name, value) {
+/** 写输出变量 */
+export function set_output(name: string, value: unknown): boolean {
   const output_path = process.env.GITHUB_OUTPUT
   if (!output_path) return false
   try {
     fs.appendFileSync(output_path, `${name}=${String(value)}\n`, 'utf8')
     return true
   } catch (exc) {
-    // 写不进去时 workflow 不会再拿到 auto_merge/merged，必须让人从日志里看到
     println(`::warning::无法写入 GitHub Actions 输出 ${name}：${exc}`)
     return false
   }
 }
 
-/** 配置里的跨作者标签；兼容写成单个字符串的情况。 */
-function foreign_labels(cfg) {
+/** 跨作者标签 */
+function foreign_labels(cfg: ReviewConfig): string[] {
   const value = cfg.foreign_folder_labels ?? []
   const list = Array.isArray(value) ? value : [value]
   return list.map((item) => String(item).trim()).filter(Boolean)
 }
 
-/** 配置里的批准命令（保留原始写法）；兼容写成单个字符串的情况。 */
-function approval_command_list(cfg) {
+/** 批准命令列表 */
+function approval_command_list(cfg: ReviewConfig): string[] {
   const value = cfg.approve_commands ?? []
   const list = Array.isArray(value) ? value : [value]
   return list.map((item) => String(item).trim()).filter(Boolean)
 }
 
-/** 用于匹配的批准命令集合（大小写不敏感）。 */
-function approval_commands(cfg) {
+/** 批准命令集合 */
+function approval_commands(cfg: ReviewConfig): Set<string> {
   return new Set(approval_command_list(cfg).map((item) => item.toLowerCase()))
 }
 
-/** 提示文案里展示的批准命令：优先用配置里的第一条。 */
-function primary_approval_command(cfg) {
+/** 主批准命令 */
+function primary_approval_command(cfg: ReviewConfig): string {
   return approval_command_list(cfg)[0] || '/approve'
 }
 
-/** 评论内容是否恰好是一条批准命令（不接受附带其它文字，避免误触发）。 */
-export function is_approval_comment(body, cfg) {
+/** 判断批准命令 */
+export function is_approval_comment(body: unknown, cfg: ReviewConfig): boolean {
   return approval_commands(cfg).has(String(body ?? '').trim().toLowerCase())
 }
 
-/** 确保仓库里存在该标签（已存在时 API 返回 422，忽略）。 */
-async function ensure_label(repo, name) {
+/** 确保标签存在 */
+async function ensure_label(repo: string, name: string): Promise<void> {
   try {
     await api_send('POST', `/repos/${repo}/labels`, {
       name,
@@ -1233,8 +1346,12 @@ async function ensure_label(repo, name) {
   }
 }
 
-/** 给 PR 打标签；失败只告警，不影响审核结论。 */
-export async function add_labels_safely(repo, pr_number, labels) {
+/** 安全添加标签 */
+export async function add_labels_safely(
+  repo: string,
+  pr_number: string | number,
+  labels: ReadonlyArray<unknown> | string,
+): Promise<void> {
   const names = (Array.isArray(labels) ? labels : []).map((item) => String(item).trim()).filter(Boolean)
   if (!names.length) return
   try {
@@ -1245,14 +1362,17 @@ export async function add_labels_safely(repo, pr_number, labels) {
   }
 }
 
-/** 移除 PR 上的跨作者标签；失败只告警，不影响审核结论。 */
-export async function remove_labels_safely(repo, pr_number, labels) {
+/** 安全移除标签 */
+export async function remove_labels_safely(
+  repo: string,
+  pr_number: string | number,
+  labels: ReadonlyArray<unknown> | string,
+): Promise<void> {
   const names = (Array.isArray(labels) ? labels : []).map((item) => String(item).trim()).filter(Boolean)
   for (const name of names) {
     try {
       await api_send('DELETE', `/repos/${repo}/issues/${pr_number}/labels/${pyQuote(name)}`)
     } catch (exc) {
-      // 标签本来就没打上时返回 404，属正常情况
       if (!(exc instanceof HttpError) || exc.code !== 404) {
         println(`::warning::无法移除标签 ${name}：${exc}`)
       }
@@ -1260,8 +1380,13 @@ export async function remove_labels_safely(repo, pr_number, labels) {
   }
 }
 
-/** 在当前 head 上写入跨作者审核状态；失败只告警。 */
-async function set_review_status(repo, sha, state, description) {
+/** 写审核状态 */
+async function set_review_status(
+  repo: string,
+  sha: string,
+  state: string,
+  description: string,
+): Promise<void> {
   if (!sha) return
   try {
     await api_send('POST', `/repos/${repo}/statuses/${sha}`, {
@@ -1274,14 +1399,16 @@ async function set_review_status(repo, sha, state, description) {
   }
 }
 
-/**
- * 读取当前 head 的跨作者审核状态。
- * success：该 head 已通过内容校验；failed：校验未通过；not_ready：还没审过；
- * unknown：状态查询失败（不能据此批准）。
- */
-async function reviewed_status(repo, sha) {
+/** 读取审核状态 */
+async function reviewed_status(
+  repo: string,
+  sha: string,
+): Promise<'success' | 'failed' | 'not_ready' | 'unknown'> {
   try {
-    const statuses = await api_json(`/repos/${repo}/commits/${sha}/statuses?per_page=100`)
+    // 查询状态
+    const statuses = await api_json<GitHubStatus[]>(
+      `/repos/${repo}/commits/${sha}/statuses?per_page=100`,
+    )
     if (!Array.isArray(statuses)) return 'not_ready'
     const latest = statuses.find((item) => item && item.context === REVIEW_STATUS_CONTEXT)
     if (!latest) return 'not_ready'
@@ -1294,14 +1421,17 @@ async function reviewed_status(repo, sha) {
   }
 }
 
-/**
- * PR 是否仍处于打开状态；传 expectedSha 时还要求 head 没有变化。
- * 查询失败时保守放行，不阻断正常审核。
- */
-async function pull_request_is_open(repo, pr_number, expectedSha = null) {
+/** 判断 PR 可合并 */
+async function pull_request_is_open(
+  repo: string,
+  pr_number: string | number,
+  expectedSha: string | null = null,
+): Promise<boolean> {
   try {
-    const pr = await api_json(`/repos/${repo}/pulls/${pr_number}`)
-    if (!isPlainObject(pr) || pr.state !== 'open' || pr.merged) return false
+    const pr = await api_json<GitHubPullRequest>(`/repos/${repo}/pulls/${pr_number}`)
+    if (!pr || typeof pr !== 'object' || Array.isArray(pr) || pr.state !== 'open' || pr.merged) {
+      return false
+    }
     if (expectedSha && pr.head && pr.head.sha !== expectedSha) return false
     return true
   } catch (exc) {
@@ -1310,17 +1440,16 @@ async function pull_request_is_open(repo, pr_number, expectedSha = null) {
   }
 }
 
-/**
- * 拉取并完整审核一个 PR。
- *
- * files 已传时不再重复拉取（批准流程会先拉一次做轻量所有者校验）。
- * 路径层面已有错误时直接返回，不下载 .cs 内容——既避免重复报错，
- * 也防止超大 / 多文件夹 PR 被反复拉取内容。
- *
- * 返回 { files, errors, warnings, rows, foreign, known_folders, api_error }。
- * api_error 非空表示连文件列表都拿不到，调用方决定如何提示。
- */
-async function review_pull_request(repo, pr_number, author, head_sha, base_ref, cfg, files = null) {
+/** 审核 PR */
+async function review_pull_request(
+  repo: string,
+  pr_number: string | number,
+  author: string,
+  head_sha: string,
+  base_ref: string,
+  cfg: ReviewConfig,
+  files: ChangedFile[] | null = null,
+): Promise<ReviewOutcome> {
   if (files === null) {
     try {
       files = await list_changed_files(repo, pr_number, Number(cfg.max_files_per_pr ?? 100) + 1)
@@ -1337,12 +1466,13 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
     }
   }
 
-  const script_guids = []
-  const known_folders = new Set()
-  let errors
-  let warnings
-  let rows
-  let foreign = []
+  // 收集 guid
+  const script_guids: Array<[string, string]> = []
+  const known_folders = new Set<string>()
+  let errors: string[]
+  let warnings: string[]
+  let rows: Array<[string, string]>
+  let foreign: ForeignChange[] = []
   if (!files.length) {
     errors = ['该 PR 没有包含任何文件改动']
     warnings = []
@@ -1351,8 +1481,6 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
   } else {
     ;[errors, warnings, rows, foreign] = check_change_set(files, author, cfg)
 
-    // 路径层面已经不可能通过时，不再下载任何 .cs 内容。
-    // 这样超大 PR、多作者文件夹、非法路径都无法靠反复提交触发大量 API 调用。
     if (errors.length) {
       warnings.push('存在路径层面的错误，本次跳过 .cs 内容校验；修复后重新提交会重新校验。')
       return { files, errors, warnings, rows, foreign, known_folders, api_error: null }
@@ -1364,6 +1492,7 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
       let data
       let fetch_error
       try {
+        // 下载内容
         ;[data, fetch_error] = await fetch_file_bytes(repo, filePath, head_sha)
       } catch (exc) {
         errors.push(`${filePath}：读取文件内容失败 —— ${exc}`)
@@ -1375,7 +1504,7 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
       }
       let text
       try {
-        text = utf8DecodeStrict(data)
+        text = utf8DecodeStrict(data as Buffer)
       } catch (exc) {
         errors.push(`${filePath}：不是合法的 UTF-8 编码（${exc}）`)
         continue
@@ -1390,7 +1519,7 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
       }
     }
 
-    // guid 查重：拿仓库里已提交的映射表比对（改名 / 移动自己的文件不算冲突）
+    // 查重准备
     const own_paths = new Set()
     for (const item of files) {
       for (const key of ['filename', 'previous_filename']) {
@@ -1418,13 +1547,14 @@ async function review_pull_request(repo, pr_number, author, head_sha, base_ref, 
   return { files, errors, warnings, rows, foreign, known_folders, api_error: null }
 }
 
-/** CI 入口：审核 PR 并输出报告。返回 0 通过 / 1 未通过 / 2 无法执行。 */
-export async function run_ci() {
+/** CI 入口 */
+export async function run_ci(): Promise<number> {
   const repo = process.env.GITHUB_REPOSITORY ?? ''
   const pr_number = process.env.PR_NUMBER ?? ''
   const author = process.env.PR_AUTHOR ?? ''
   const head_sha = process.env.PR_HEAD_SHA ?? ''
 
+  // 环境变量
   const missing = [
     ['GITHUB_REPOSITORY', repo], ['PR_NUMBER', pr_number], ['PR_AUTHOR', author],
     ['PR_HEAD_SHA', head_sha],
@@ -1437,13 +1567,13 @@ export async function run_ci() {
   const cfg = load_config()
   const base_ref = process.env.PR_BASE_REF || process.env.PR_BASE_SHA || ''
 
-  // 已关闭/合并、或事件里的 head 已经不是最新提交时，不再审核。
   if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
     println(`::notice::PR #${pr_number} 已关闭、已合并或已有新提交，跳过审核`)
     set_output('auto_merge', 'false')
     return 0
   }
 
+  // 执行审核
   const review = await review_pull_request(repo, pr_number, author, head_sha, base_ref, cfg)
   if (review.api_error) {
     const message = review.api_error
@@ -1459,7 +1589,6 @@ export async function run_ci() {
 
   const { rows, errors, warnings, foreign, known_folders } = review
 
-  // 审核期间 PR 可能已被合并，或作者又推了新提交；旧结果不要再补发。
   if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
     println(`::notice::PR #${pr_number} 已关闭、已合并或已有新提交，跳过本次审核结果`)
     set_output('auto_merge', 'false')
@@ -1485,7 +1614,6 @@ export async function run_ci() {
   }
 
   if (foreign.length) {
-    // 只 @ 已经在仓库里存在脚本的作者文件夹，避免 PR 作者随便建个 Victim/ 就能骚扰别人
     const mentionable = foreign.filter(
       (item) => known_folders.has(normalize_login(item.folder, true)),
     )
@@ -1518,14 +1646,8 @@ export async function run_ci() {
   return 0
 }
 
-/**
- * 文件夹所有者批准入口：PR 会话里回复 /approve 后触发。
- *
- * 只信任评论者的 GitHub 登录名（必须等于被改文件夹名），并重新校验当前 head；
- * 合并时带 sha，防止评论后作者又推新代码。
- * 返回 0 成功或忽略 / 1 未通过或合并失败 / 2 无法执行。
- */
-export async function run_approval() {
+/** 批准入口 */
+export async function run_approval(): Promise<number> {
   const repo = process.env.GITHUB_REPOSITORY ?? ''
   const pr_number = process.env.PR_NUMBER ?? ''
   const comment_author = process.env.COMMENT_AUTHOR ?? ''
@@ -1540,20 +1662,19 @@ export async function run_approval() {
     return 2
   }
 
-  // 机器人自己的评论、其他 App 的评论一律忽略
   if (comment_type === 'Bot' || comment_author.toLowerCase().endsWith('[bot]')) return 0
 
   const cfg = load_config()
   if (!is_approval_comment(comment_body, cfg)) return 0
 
-  let pr
+  let pr: GitHubPullRequest | null
   try {
-    pr = await api_json(`/repos/${repo}/pulls/${pr_number}`)
+    pr = await api_json<GitHubPullRequest>(`/repos/${repo}/pulls/${pr_number}`)
   } catch (exc) {
     println(`::warning::无法读取 PR #${pr_number}：${exc}`)
     return 2
   }
-  if (!isPlainObject(pr)) {
+  if (!pr || typeof pr !== 'object' || Array.isArray(pr)) {
     println(`::warning::PR #${pr_number} 返回内容不是对象，跳过`)
     return 2
   }
@@ -1588,8 +1709,7 @@ export async function run_approval() {
     return 2
   }
 
-  // 轻量预检：只解析路径，不下载 .cs；先确认评论者确实是被改文件夹的所有者。
-  // 非所有者的 /approve 到这里就返回，不能靠刷评论触发内容下载。
+  // 所有者预检
   const [, , , pre_foreign] = check_change_set(files, author, cfg)
   if (!pre_foreign.length) {
     println(`::notice::PR #${pr_number} 没有修改别人的文件夹，不需要所有者批准`)
@@ -1599,13 +1719,11 @@ export async function run_approval() {
   const owner_key = normalize_login(comment_author, true)
   const owns_some = folders.some((folder) => normalize_login(folder, true) === owner_key)
   if (!owns_some) {
-    // 不是被改文件夹的所有者：静默忽略，避免任何用户刷 /approve 都能得到回复
     println(`::notice::${comment_author} 不是被修改文件夹的所有者，忽略批准命令`)
     return 0
   }
 
-  // 批准只对「机器人已经审核过的当前 head」有效。
-  // 作者在所有者评论前刚推了新提交、或评论后才推送，都会在这里被拦下。
+  // 审核状态
   const status = await reviewed_status(repo, head_sha)
   if (status !== 'success') {
     const short_sha = head_sha.slice(0, 7)
@@ -1650,7 +1768,6 @@ export async function run_approval() {
     return 1
   }
 
-  // 审核期间如果 head 已变化，批准就对不上所有者看到的版本了
   if (!(await pull_request_is_open(repo, pr_number, head_sha))) {
     await post_comment_safely(
       repo,
@@ -1662,6 +1779,7 @@ export async function run_approval() {
 
   let merge_result
   try {
+    // 合并 PR
     merge_result = await api_send('PUT', `/repos/${repo}/pulls/${pr_number}/merge`, {
       merge_method: 'squash',
       sha: head_sha,
@@ -1695,13 +1813,9 @@ export async function run_approval() {
   return 0
 }
 
-// --------------------------------------------------------------------------- //
-// 本地子命令
-// --------------------------------------------------------------------------- //
-
-/** 读取文件并解码为 UTF-8，返回 [文本, 退出码]；读取或解码失败时文本为 None。 */
-export function read_utf8(filePath) {
-  let data
+/** 读取 UTF-8 */
+export function read_utf8(filePath: string): [string | null, number] {
+  let data: Buffer
   try {
     data = fs.readFileSync(filePath)
   } catch (exc) {
@@ -1716,30 +1830,31 @@ export function read_utf8(filePath) {
   }
 }
 
-/** 严格 UTF-8 解码（对应 Python 的 data.decode("utf-8")）。 */
-function utf8DecodeStrict(data) {
+/** 严格解码 */
+function utf8DecodeStrict(data: Uint8Array): string {
   return new TextDecoder('utf-8', { fatal: true }).decode(data)
 }
 
-/** 把 Node 的 fs 错误近似翻译成 Python OSError 的字符串形式。 */
-function pyOsErrorString(err) {
-  const table = {
+/** 格式化文件错误 */
+function pyOsErrorString(err: unknown): string {
+  const table: Record<string, [number, string]> = {
     ENOENT: [2, 'No such file or directory'],
     EACCES: [13, 'Permission denied'],
     EPERM: [1, 'Operation not permitted'],
     EISDIR: [21, 'Is a directory'],
     ENOTDIR: [20, 'Not a directory'],
   }
-  const entry = table[err && err.code]
+  const nodeError = (err ?? {}) as { code?: string; path?: string; message?: string }
+  const entry = table[nodeError.code ?? '']
   if (entry) {
-    const target = err.path != null ? `: '${err.path}'` : ''
+    const target = nodeError.path != null ? `: '${nodeError.path}'` : ''
     return `[Errno ${entry[0]}] ${entry[1]}${target}`
   }
-  return err && err.message ? err.message : String(err)
+  return nodeError.message ? nodeError.message : String(err)
 }
 
-/** 校验生成的 OnlineRepo.json。 */
-export function cmd_check_json(paths, cfg) {
+/** 校验 JSON 命令 */
+export function cmd_check_json(paths: string[], cfg: ReviewConfig): number {
   let exit_code = 0
   for (const filePath of paths) {
     const [text, code] = read_utf8(filePath)
@@ -1763,8 +1878,8 @@ export function cmd_check_json(paths, cfg) {
   return exit_code
 }
 
-/** 本地校验时推断文件夹名（即 author 回退用的值）。 */
-export function infer_owner(filePath) {
+/** 推断文件夹 */
+export function infer_owner(filePath: string): string {
   const absolute = path.resolve(filePath)
   let rel = ''
   try {
@@ -1781,8 +1896,8 @@ export function infer_owner(filePath) {
   return path.basename(path.dirname(absolute)) || 'unknown'
 }
 
-/** 对应 os.path.relpath：跨盘符时 Python 抛 ValueError，这里同样抛错。 */
-function relativePortable(target, base) {
+/** 可移植相对路径 */
+function relativePortable(target: string, base: string): string {
   if (process.platform === 'win32') {
     const targetRoot = path.parse(target).root.toLowerCase()
     const baseRoot = path.parse(base).root.toLowerCase()
@@ -1791,8 +1906,12 @@ function relativePortable(target, base) {
   return path.relative(base, target).split(path.sep).join('/')
 }
 
-/** 校验本地 .cs 文件；owner 决定 author 缺失时回退成什么。 */
-export function cmd_check_cs(paths, owner, cfg) {
+/** 校验 .cs 命令 */
+export function cmd_check_cs(
+  paths: string[],
+  owner: string | undefined,
+  cfg: ReviewConfig,
+): number {
   let exit_code = 0
   for (const filePath of paths) {
     const [text, code] = read_utf8(filePath)
@@ -1813,20 +1932,24 @@ export function cmd_check_cs(paths, owner, cfg) {
       exit_code = 1
     } else {
       println(
-        `✅ ${filePath} 通过：Name=${pyReprAny(meta.name)} Guid=${pyReprAny(meta.guid)} ` +
-        `Version=${pyReprAny(meta.version)} Author=${pyReprAny(meta.author)} ` +
-        `TerritoryIds=${pyReprAny(meta.territorys)}`
+        `✅ ${filePath} 通过：Name=${pyReprAny(meta!.name)} Guid=${pyReprAny(meta!.guid)} ` +
+        `Version=${pyReprAny(meta!.version)} Author=${pyReprAny(meta!.author)} ` +
+        `TerritoryIds=${pyReprAny(meta!.territorys)}`
       )
     }
   }
   return exit_code
 }
 
-/** 校验路径规则。 */
-export function cmd_path_check(author, paths, cfg) {
+/** 校验路径命令 */
+export function cmd_path_check(
+  author: string,
+  paths: string[],
+  cfg: ReviewConfig,
+): number {
   let exit_code = 0
   for (const filePath of paths) {
-    const errors = []
+    const errors: string[] = []
     check_path_rules(filePath, author, cfg, errors, '路径')
     for (const item of errors) {
       println(`❌ ${item}`)
@@ -1840,12 +1963,19 @@ export function cmd_path_check(author, paths, cfg) {
   return exit_code
 }
 
-/** 命令行入口：无子命令时进入 CI 审核模式。 */
-export async function main(argv = process.argv.slice(2)) {
-  let values
-  let positionals
+/** 命令行入口 */
+export async function main(argv = process.argv.slice(2)): Promise<number> {
+  let values: {
+    'check-cs'?: string[]
+    'check-json'?: string[]
+    owner?: string
+    'path-check'?: string
+    path?: string[]
+    'approve-comment'?: boolean
+  }
+  let positionals: string[]
   try {
-    ;({ values, positionals } = parseArgs({
+    const parsed = parseArgs({
       args: argv,
       options: {
         'check-cs': { type: 'string', multiple: true },
@@ -1857,13 +1987,15 @@ export async function main(argv = process.argv.slice(2)) {
       },
       allowPositionals: true,
       strict: false,
-    }))
+    })
+    values = parsed.values as unknown as typeof values
+    positionals = parsed.positionals
   } catch (exc) {
-    process.stderr.write(`usage: pr_review.mjs [--check-cs FILE ...] [--check-json FILE ...]\npr_review.mjs: error: ${exc.message}\n`)
+    const message = exc instanceof Error ? exc.message : String(exc)
+    process.stderr.write(`usage: pr_review.ts [--check-cs FILE ...] [--check-json FILE ...]\npr_review.ts: error: ${message}\n`)
     return 2
   }
 
-  // argparse 的 nargs='+' 允许把位置参数一并吃给 --check-cs / --check-json。
   const checkCs = values['check-cs'] ? [...values['check-cs'], ...positionals] : null
   const checkJson = values['check-json'] ? [...values['check-json'], ...positionals] : null
   const pathArgs = values.path ?? []
@@ -1878,7 +2010,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
   if (values['path-check']) {
     if (!pathArgs.length) {
-      process.stderr.write('usage: pr_review.mjs [--path-check AUTHOR --path PATH ...]\npr_review.mjs: error: --path-check 需要至少一个 --path\n')
+      process.stderr.write('usage: pr_review.ts [--path-check AUTHOR --path PATH ...]\npr_review.ts: error: --path-check 需要至少一个 --path\n')
       return 2
     }
     return cmd_path_check(values['path-check'], pathArgs, cfg)
@@ -1889,13 +2021,16 @@ export async function main(argv = process.argv.slice(2)) {
   return run_ci()
 }
 
-// --------------------------------------------------------------------------- //
-// Python json.loads 的等价实现（错误文案 / 行列号与 CPython json.decoder 一致）
-// --------------------------------------------------------------------------- //
-
-/** 对应 json.JSONDecodeError，带 msg / lineno / colno / pos。 */
+/** JSON 错误 */
 export class PyJsonDecodeError extends Error {
-  constructor(msg, doc, pos) {
+  msg: string
+  doc: string
+  pos: number
+  lineno: number
+  colno: number
+
+  /** 构造函数 */
+  constructor(msg: string, doc: string, pos: number) {
     const lineno = countNewlines(doc, 0, pos) + 1
     const colno = pos - doc.lastIndexOf('\n', pos - 1)
     super(`${msg}: line ${lineno} column ${colno} (char ${pos})`)
@@ -1908,8 +2043,8 @@ export class PyJsonDecodeError extends Error {
   }
 }
 
-/** doc[start:end) 里 '\n' 的个数（对应 str.count）。 */
-function countNewlines(doc, start, end) {
+/** 统计换行 */
+function countNewlines(doc: string, start: number, end: number): number {
   let count = 0
   for (let i = start; i < end; i += 1) {
     if (doc[i] === '\n') count += 1
@@ -1918,10 +2053,11 @@ function countNewlines(doc, start, end) {
 }
 
 const JSON_WS = ' \t\n\r'
-const isJsonWs = (ch) => ch !== undefined && ch !== '' && JSON_WS.includes(ch)
+/** JSON 空白判断 */
+const isJsonWs = (ch: string | undefined): boolean => ch !== undefined && ch !== '' && JSON_WS.includes(ch)
 
-/** 跳过 JSON 空白，返回新下标（对应 WHITESPACE.match(s, pos).end()）。 */
-function jsonWs(doc, pos) {
+/** 跳过 JSON 空白 */
+function jsonWs(doc: string, pos: number): number {
   let i = pos
   while (i < doc.length && isJsonWs(doc[i])) i += 1
   return i
@@ -1929,21 +2065,26 @@ function jsonWs(doc, pos) {
 
 const JSON_NUMBER_RE = /^(-?(?:0|[1-9][0-9]*))(\.[0-9]+)?([eE][-+]?[0-9]+)?/
 const JSON_HEX_RE = /^[0-9A-Fa-f]{4}/
-const JSON_ESCAPES = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' }
+const JSON_ESCAPES: Record<string, string> = { '"': '"', '\\': '\\', '/': '/', b: '\b', f: '\f', n: '\n', r: '\r', t: '\t' }
 
-/** 对应 json.decoder._decode_uXXXX。 */
-function decodeUXXXX(doc, pos) {
+/** 判断中止信号 */
+function isStopSignal(err: unknown): err is { stop: number } {
+  if (typeof err !== 'object' || err === null) return false
+  return typeof (err as { stop?: unknown }).stop === 'number'
+}
+
+/** 解码 \uXXXX */
+function decodeUXXXX(doc: string, pos: number): number {
   const m = JSON_HEX_RE.exec(doc.slice(pos + 1))
   if (m) return parseInt(m[0], 16)
   throw new PyJsonDecodeError('Invalid \\uXXXX escape', doc, pos)
 }
 
-/** 对应 json.decoder.py_scanstring：返回 [值, 结束下标]。 */
-function jsonScanString(doc, end) {
-  const parts = []
+/** 扫描字符串 */
+function jsonScanString(doc: string, end: number): [string, number] {
+  const parts: string[] = []
   const begin = end - 1
   for (;;) {
-    // STRINGCHUNK = (.*?)(["\\\x00-\x1f])，找到最近的分隔字符
     let j = end
     while (j < doc.length) {
       const ch = doc[j]
@@ -1989,8 +2130,8 @@ function jsonScanString(doc, end) {
   return [parts.join(''), end]
 }
 
-/** 对应 CPython 的 json/scanner.py 里的 _scan_once（不含 NaN/Infinity：json.loads 默认支持，这里保留）。 */
-function jsonScanOnce(doc, idx) {
+/** 扫描单个值 */
+function jsonScanOnce(doc: string, idx: number): [JsonValue, number] {
   if (idx >= doc.length) throw { stop: idx }
   const c = doc[idx]
   if (c === '"') return jsonScanString(doc, idx + 1)
@@ -2003,7 +2144,6 @@ function jsonScanOnce(doc, idx) {
   const m = JSON_NUMBER_RE.exec(doc.slice(idx))
   if (m) {
     const [, integer, frac, exp] = m
-    // 带小数部分或指数的走 PyFloat，保持「小数」身份，别被当成整数放行
     const value =
       frac || exp
         ? new PyFloat(Number(integer + (frac || '') + (exp || '')))
@@ -2016,9 +2156,9 @@ function jsonScanOnce(doc, idx) {
   throw { stop: idx }
 }
 
-/** 对应 json.decoder.JSONObject。 */
-function jsonParseObject(doc, end) {
-  const obj = Object.create(null)
+/** 解析 JSON 对象 */
+function jsonParseObject(doc: string, end: number): [Record<string, JsonValue>, number] {
+  const obj: Record<string, JsonValue> = Object.create(null)
   let nextchar = end < doc.length ? doc[end] : ''
   if (nextchar !== '"') {
     if (isJsonWs(nextchar)) {
@@ -2049,7 +2189,7 @@ function jsonParseObject(doc, end) {
     try {
       ;[value, end] = jsonScanOnce(doc, end)
     } catch (err) {
-      if (err && err.stop !== undefined) {
+      if (isStopSignal(err)) {
         throw new PyJsonDecodeError('Expecting value', doc, err.stop)
       }
       throw err
@@ -2084,9 +2224,9 @@ function jsonParseObject(doc, end) {
   return [obj, end]
 }
 
-/** 对应 json.decoder.JSONArray。 */
-function jsonParseArray(doc, end) {
-  const values = []
+/** 解析 JSON 数组 */
+function jsonParseArray(doc: string, end: number): [JsonValue[], number] {
+  const values: JsonValue[] = []
   let nextchar = end < doc.length ? doc[end] : ''
   if (isJsonWs(nextchar)) {
     end = jsonWs(doc, end + 1)
@@ -2099,7 +2239,7 @@ function jsonParseArray(doc, end) {
     try {
       ;[value, end] = jsonScanOnce(doc, end)
     } catch (err) {
-      if (err && err.stop !== undefined) {
+      if (isStopSignal(err)) {
         throw new PyJsonDecodeError('Expecting value', doc, err.stop)
       }
       throw err
@@ -2123,7 +2263,7 @@ function jsonParseArray(doc, end) {
       }
       nextchar = end < doc.length ? doc[end] : ''
     } catch {
-      // 对应 Python 的 IndexError: pass
+      // 忽略
     }
     if (nextchar === ']') {
       throw new PyJsonDecodeError('Illegal trailing comma before end of array', doc, commaIdx)
@@ -2132,14 +2272,15 @@ function jsonParseArray(doc, end) {
   return [values, end]
 }
 
-/** 等价于 json.loads(text)（默认 strict=True）。 */
-export function pyJsonLoads(text) {
+/** 解析 JSON */
+export function pyJsonLoads(text: string): JsonValue {
+  // 跳过空白
   let end = jsonWs(text, 0)
-  let obj
+  let obj: JsonValue
   try {
     ;[obj, end] = jsonScanOnce(text, end)
   } catch (err) {
-    if (err && err.stop !== undefined) {
+    if (isStopSignal(err)) {
       throw new PyJsonDecodeError('Expecting value', text, err.stop)
     }
     throw err
@@ -2151,7 +2292,6 @@ export function pyJsonLoads(text) {
   return obj
 }
 
-// 直接运行本文件时进入 CLI（被 import 时不会执行）。
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   main().then((code) => process.exit(code))
 }

@@ -1,46 +1,37 @@
-/**
- * 内置自测：校验 pr_review 与 merge_repos 的核心规则。
- *
- * 从两个生产脚本里拆出来的——它们会在 CI 里无人值守地审核并合并 PR，还托管着会被
- * 插件编译执行的脚本，改完之后必须能快速确认行为没变。这里不联网、不碰真实仓库，
- * 只在临时目录里造样本。
- *
- *     node .github/scripts/tests/selftest.mjs
- *
- * 本文件由 selftest.py 移植而来（Python 版已随迁移移除）：断言集合与输出格式保持一致，
- * 另外补了一组 csharp_meta 的边界用例。
- */
-
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
-import * as csharpMeta from '../csharp_meta.mjs'
-import * as mergeRepos from '../merge_repos.mjs'
-import * as prReview from '../pr_review.mjs'
+import * as csharpMeta from '../csharp_meta.ts'
+import * as mergeRepos from '../merge_repos.ts'
+import * as prReview from '../pr_review.ts'
+import type { ReviewConfig, ForeignChange } from '../pr_review.ts'
+import type { OnlineScriptEntry } from '../merge_repos.ts'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
 
-/** 结构性比较，忽略对象原型差异（Python 的 == 语义）。 */
-export function deepEqual(a, b) {
+/** 深度比较 */
+export function deepEqual(a: unknown, b: unknown): boolean {
   if (a === b) return true
   if (Array.isArray(a) || Array.isArray(b)) {
     if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false
     return a.every((item, index) => deepEqual(item, b[index]))
   }
   if (a && b && typeof a === 'object' && typeof b === 'object') {
-    const keysA = Object.keys(a)
-    const keysB = Object.keys(b)
+    const recA = a as Record<string, unknown>
+    const recB = b as Record<string, unknown>
+    const keysA = Object.keys(recA)
+    const keysB = Object.keys(recB)
     if (keysA.length !== keysB.length) return false
-    return keysA.every((key) => Object.hasOwn(b, key) && deepEqual(a[key], b[key]))
+    return keysA.every((key) => Object.hasOwn(recB, key) && deepEqual(recA[key], recB[key]))
   }
   return false
 }
 
-/** 详情字符串：对象走 JSON，避免无原型对象（Object.create(null)）没法被 show()。 */
-function show(value) {
+/** 转详情文本 */
+function show(value: unknown): string {
   if (typeof value === 'string') return value
   try {
     return JSON.stringify(value)
@@ -49,22 +40,21 @@ function show(value) {
   }
 }
 
-/** 造一个临时目录，用后由调用方删除。 */
-const makeTempDir = (prefix) => fs.mkdtempSync(path.join(os.tmpdir(), prefix))
+/** 建临时目录 */
+const makeTempDir = (prefix: string): string => fs.mkdtempSync(path.join(os.tmpdir(), prefix))
 
-/** 递归删除，对应 Python 的 shutil.rmtree(..., ignore_errors=True)。 */
-const removeDir = (dir) => fs.rmSync(dir, { recursive: true, force: true })
+/** 删除目录 */
+const removeDir = (dir: string): void => fs.rmSync(dir, { recursive: true, force: true })
 
-const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'))
+/** 读取 JSON */
+const readJson = <T = unknown>(file: string): T => JSON.parse(fs.readFileSync(file, 'utf8')) as T
 
-// --------------------------------------------------------------------------- //
-// pr_review：路径规则、.cs 校验、guid 查重、生成结果自检
-// --------------------------------------------------------------------------- //
-
-/** 跑 pr_review 的断言，返回失败项名称。 */
-export function runPrReviewChecks() {
-  const failures = []
-  const expect = (name, condition, detail = '') => {
+/** PR 审核自测 */
+export function runPrReviewChecks(): string[] {
+  // 失败列表
+  const failures: string[] = []
+  /** 断言 */
+  const expect = (name: string, condition: unknown, detail: unknown = ''): void => {
     if (condition) {
       console.log(`✅ ${name}`)
     } else {
@@ -73,6 +63,7 @@ export function runPrReviewChecks() {
     }
   }
 
+  // 默认配置
   const cfg = prReview.defaultConfig()
 
   const GUID = '8010d865-7d6d-4c23-92e0-f4b0120e18ac'
@@ -94,10 +85,9 @@ export function runPrReviewChecks() {
   )
   expect('合法 .cs 无提醒', !warnings.length, show(warnings))
 
-  // author 回退到文件夹名
   const noAuthor = goodCs.replace(', author: "Karlin"', '')
   ;({ meta, errors } = prReview.validateScriptFile(noAuthor, 'publisher/A.cs', 'publisher', cfg))
-  expect('缺 author 时用文件夹名', !errors.length && meta.author === 'publisher', show(errors))
+  expect('缺 author 时用文件夹名', !errors.length && meta?.author === 'publisher', show(errors))
 
   const unknownAuthor = goodCs.replace('"Karlin"', '"Unknown"')
   ;({ meta, errors, warnings } = prReview.validateScriptFile(
@@ -106,14 +96,13 @@ export function runPrReviewChecks() {
     'publisher',
     cfg,
   ))
-  expect('author=Unknown 时用文件夹名', !errors.length && meta.author === 'publisher', show(errors))
+  expect('author=Unknown 时用文件夹名', !errors.length && meta?.author === 'publisher', show(errors))
   expect(
     'author 回退有提醒',
     warnings.some((w) => w.includes('文件夹名')),
     show(warnings),
   )
 
-  // 结构性错误
   ;({ errors } = prReview.validateScriptFile('class X {}', 'a/A.cs', 'a', cfg))
   expect('没有特性被拒绝', errors.length > 0)
 
@@ -125,7 +114,6 @@ export function runPrReviewChecks() {
   ;({ meta, errors } = prReview.validateScriptFile(commented, 'a/A.cs', 'a', cfg))
   expect('注释里的特性不计数', !errors.length && meta !== null, show(errors))
 
-  // 词法器边界：字符字面量、字符串里的假特性、逐字字符串都必须被正确跳过（跳过失败会死循环）
   const tricky =
     goodCs +
     'class Q {\n' +
@@ -137,7 +125,6 @@ export function runPrReviewChecks() {
   ;({ meta, errors } = prReview.validateScriptFile(tricky, 'a/A.cs', 'a', cfg))
   expect('字符字面量 / 字符串不干扰解析', !errors.length && meta !== null, show(errors))
 
-  // 插值字符串：真实的 note / updateInfo 常写成插值原始字符串，不能因为含插值就整段丢掉
   const q3 = '"'.repeat(3)
   const interpolated =
     `[ScriptType(name: "N", guid: "${GUID}", version: "0.0.0.9", ` +
@@ -169,7 +156,7 @@ export function runPrReviewChecks() {
   ;({ meta, errors, warnings } = prReview.validateScriptFile(unresolved, 'a/A.cs', 'a', cfg))
   expect(
     '解不出来的插值原样保留，不报错',
-    !errors.length && !warnings.length && meta.note === 'v{Missing} 说明',
+    !errors.length && !warnings.length && meta?.note === 'v{Missing} 说明',
     show(meta) + show(errors) + show(warnings),
   )
 
@@ -185,7 +172,7 @@ export function runPrReviewChecks() {
   ;({ meta, errors, warnings } = prReview.validateScriptFile(doubleDollar, 'a/A.cs', 'a', cfg))
   expect(
     '两个 $ 时只有双花括号才是插值',
-    !errors.length && !warnings.length && meta.note === 'v1.2.3 价格 {100}',
+    !errors.length && !warnings.length && meta?.note === 'v1.2.3 价格 {100}',
     show(meta) + show(errors) + show(warnings),
   )
 
@@ -196,7 +183,7 @@ export function runPrReviewChecks() {
   ;({ meta, errors, warnings } = prReview.validateScriptFile(concat, 'a/A.cs', 'a', cfg))
   expect(
     '属性里内联写 + 拼接字面量也能还原',
-    !errors.length && !warnings.length && meta.note === 'ab9',
+    !errors.length && !warnings.length && meta?.note === 'ab9',
     show(meta) + show(errors) + show(warnings),
   )
 
@@ -204,11 +191,10 @@ export function runPrReviewChecks() {
   ;({ meta, errors, warnings } = prReview.validateScriptFile(noName, 'a/A.cs', 'a', cfg))
   expect(
     '缺 name 用默认值并提醒',
-    !errors.length && meta.name === 'Default Script' && warnings.some((w) => w.includes('name')),
+    !errors.length && meta?.name === 'Default Script' && warnings.some((w) => w.includes('name')),
   )
 
-  // 字段值错误
-  const badCases = [
+  const badCases: Array<[string, string, string]> = [
     ['guid 为空', goodCs.replace(GUID, ''), 'guid 不能为空'],
     ['version 非法', goodCs.replace('"0.0.0.9"', '"v1.0"'), '版本号'],
     ['territorys 为负数', goodCs.replace('[1226]', '[-1]'), 'uint 范围'],
@@ -236,7 +222,6 @@ export function runPrReviewChecks() {
     show(errors),
   )
 
-  // 生成的 json 自检
   const doc = JSON.stringify([
     {
       Name: 'M1s绘图',
@@ -255,16 +240,21 @@ export function runPrReviewChecks() {
   ;({ errors } = prReview.validateJsonDocument('{}', 'OnlineRepo.json', cfg))
   expect('生成的 json 顶层非数组被拒绝', errors.length > 0)
 
-  // 路径规则
-  const pathErrors = (filePath, author, config) => {
-    const collected = []
+  /** 路径校验结果 */
+  const pathErrors = (filePath: string, author: string, config?: ReviewConfig): string[] => {
+    const collected: string[] = []
     prReview.checkPathRules(filePath, author, config ?? cfg, collected, '路径')
     return collected
   }
 
-  const pathReview = (filePath, author, config) => {
-    const collected = []
-    const foreign = []
+  /** 路径审核结果 */
+  const pathReview = (
+    filePath: string,
+    author: string,
+    config?: ReviewConfig,
+  ): { errors: string[]; foreign: ForeignChange[] } => {
+    const collected: string[] = []
+    const foreign: ForeignChange[] = []
     prReview.checkPathRules(filePath, author, config ?? cfg, collected, '路径', foreign)
     return { errors: collected, foreign }
   }
@@ -289,7 +279,7 @@ export function runPrReviewChecks() {
   const caseSensitive = { ...cfg, username_case_insensitive: false }
   expect('区分大小写时被拒绝', pathErrors('karlin-z/a.cs', 'Karlin-Z', caseSensitive).length > 0)
 
-  const changeFiles = [
+  const changeFiles: prReview.ChangedFile[] = [
     { status: 'added', filename: 'Karlin-Z/M1s.cs' },
     { status: 'removed', filename: 'Karlin-Z/M2s.cs' },
   ]
@@ -361,7 +351,6 @@ export function runPrReviewChecks() {
     show(changeResult),
   )
 
-  // 所有者批准命令：必须完全匹配，避免“我看看”之类的回复误触发合并
   expect('批准命令精确匹配', prReview.is_approval_comment('/approve', cfg))
   expect('批准命令忽略大小写与首尾空白', prReview.is_approval_comment('  /APPROVE  ', cfg))
   expect('中文批准命令', prReview.is_approval_comment('/同意合并', cfg))
@@ -374,7 +363,6 @@ export function runPrReviewChecks() {
       !prReview.is_approval_comment('/approve', customApprove),
   )
 
-  // 报告净化：PR 文件名可以带换行 / 反引号，不能污染 Actions 日志或 Markdown 评论
   const evilReport = prReview.describe(
     [['新增', 'Other/a\n::set-output name=auto_merge::true.cs']],
     ['文件 Other/a\n::error::x.cs：bad'],
@@ -407,7 +395,6 @@ export function runPrReviewChecks() {
   )
   expect('维护者白名单大小写不敏感', !changeResult.errors.length, show(changeResult.errors))
 
-  // guid 查重
   const guidMap = { [GUID]: 'alice/A.cs' }
   let errs = prReview.checkGuidCollisions([['bob/B.cs', GUID]], new Set(), 'bob', guidMap, cfg)
   expect('guid 被别人占用被拒绝', errs.some((e) => e.includes('已被 alice/A.cs 使用')), show(errs))
@@ -451,7 +438,6 @@ export function runPrReviewChecks() {
   )
   expect('拿不到映射表时不误报', !errs.length, show(errs))
 
-  // ignore_dirs 里的文件夹
   const ignoreCfg = { ...cfg, ignore_dirs: ['skipme'] }
   changeResult = prReview.checkChangeSet([{ status: 'added', filename: 'skipme/a.cs' }], 'skipme', ignoreCfg)
   expect(
@@ -460,7 +446,6 @@ export function runPrReviewChecks() {
     show(changeResult.errors),
   )
 
-  // 回归测试：配置拷贝必须是深拷贝
   const probe = prReview.defaultConfig()
   probe.maintainers.push('__probe__')
   expect('default_config 返回深拷贝', deepEqual(prReview.DEFAULT_CONFIG.maintainers, []))
@@ -468,22 +453,25 @@ export function runPrReviewChecks() {
   return failures
 }
 
-// --------------------------------------------------------------------------- //
-// merge_repos：扫描范围、DownloadUrl、去重、ignore_dirs、产物
-// --------------------------------------------------------------------------- //
-
-/** 自测用：拼一个最小可解析的 .cs 内容。 */
-function cs(guid, name = '测试脚本', author = null, version = '0.0.1', territorys = '[1226]') {
+/** 构造测试脚本 */
+function cs(
+  guid: string,
+  name = '测试脚本',
+  author: string | null = null,
+  version = '0.0.1',
+  territorys: string | null = '[1226]',
+): string {
   const parts = [`name: "${name}"`, `guid: "${guid}"`, `version: "${version}"`]
   if (author !== null) parts.push(`author: "${author}"`)
   if (territorys !== null) parts.push(`territorys: ${territorys}`)
   return '[ScriptType(' + parts.join(', ') + ')]\npublic class S { }\n'
 }
 
-/** 跑 merge_repos 的断言，返回失败项名称。 */
-export function runMergeReposChecks() {
-  const failures = []
-  const expect = (name, condition, detail = '') => {
+/** 索引合并自测 */
+export function runMergeReposChecks(): string[] {
+  const failures: string[] = []
+  /** 断言 */
+  const expect = (name: string, condition: unknown, detail: unknown = ''): void => {
     if (condition) {
       console.log(`✅ ${name}`)
     } else {
@@ -494,10 +482,10 @@ export function runMergeReposChecks() {
 
   const cfg = prReview.defaultConfig()
 
-  /** build 会往 stdout 写报告，自测里屏蔽掉。 */
-  const quietBuild = (...args) => {
+  /** 静默执行 build */
+  const quietBuild = (...args: Parameters<typeof mergeRepos.build>): number => {
     const original = process.stdout.write
-    process.stdout.write = () => true
+    process.stdout.write = (() => true) as typeof process.stdout.write
     try {
       return mergeRepos.build(...args)
     } finally {
@@ -511,26 +499,28 @@ export function runMergeReposChecks() {
   const GUID_A4 = '37ea4922-dee4-b998-f23f-e2a1cd1b1bcd'
   const GUID_B2 = 'a4e14eff-0aea-a4b6-d8c3-47644a3e9e9a'
 
+  // 临时目录
   const workdir = makeTempDir('kasl_merge_')
   try {
     for (const rel of ['alice/sub', 'alice/_draft', 'alice/skipme', 'bob', '.github/scripts', '_site']) {
       fs.mkdirSync(path.join(workdir, rel), { recursive: true })
     }
 
-    const write = (rel, content) => {
+    /** 写测试文件 */
+    const write = (rel: string, content: string): void => {
       fs.writeFileSync(path.join(workdir, rel), content, 'utf8')
     }
 
     write('alice/A1.cs', cs(GUID_A1, 'A1', 'Alice'))
-    write('alice/sub/A2.cs', cs(GUID_A2, 'A2', null)) // 作者回退到文件夹名
-    write('alice/_draft/A3.cs', cs(GUID_A3, 'A3', 'Alice')) // 子目录里 _ 开头也要收录
-    write('alice/skipme/A4.cs', cs(GUID_A4, 'A4', 'Alice')) // 供 ignore_dirs 测试
-    write('bob/B1.cs', cs(GUID_A1, 'B1', 'Bob')) // 与 alice 冲突
+    write('alice/sub/A2.cs', cs(GUID_A2, 'A2', null)) 
+    write('alice/_draft/A3.cs', cs(GUID_A3, 'A3', 'Alice')) 
+    write('alice/skipme/A4.cs', cs(GUID_A4, 'A4', 'Alice')) 
+    write('bob/B1.cs', cs(GUID_A1, 'B1', 'Bob')) 
     write('bob/B2.cs', cs(GUID_B2, 'B2', 'Bob', '0.0.1', '[1226, 1228]'))
-    write('alice/Bad.cs', 'public class NoAttribute { }\n') // 无特性 -> 跳过
+    write('alice/Bad.cs', 'public class NoAttribute { }\n') 
     write('.github/scripts/x.cs', cs(GUID_A1, 'ignored'))
     write('_site/y.cs', cs(GUID_A1, 'ignored'))
-    write('OnlineRepo.json', '[]') // 根目录产物不参与扫描
+    write('OnlineRepo.json', '[]') 
 
     let collected = mergeRepos.collect(workdir, cfg, 'owner/repo', 'main')
     let { records, skipped, fileCounts } = collected
@@ -543,7 +533,7 @@ export function runMergeReposChecks() {
     expect('无特性的文件被跳过', skipped.some(([rel]) => rel === 'alice/Bad.cs'), show(skipped))
     expect('按贡献者统计文件数', deepEqual(fileCounts, { alice: 5, bob: 2 }), show(fileCounts))
 
-    const byName = {}
+    const byName: Record<string, OnlineScriptEntry> = {}
     for (const [, , entry] of records) byName[entry.Name] = entry
     expect('author 缺失时用文件夹名', byName.A2.Author === 'alice', byName.A2.Author)
     expect(
@@ -561,7 +551,7 @@ export function runMergeReposChecks() {
         mergeRepos.CANONICAL_FIELD_ORDER.filter((k) => keysA1.includes(k)),
       ) &&
         keysA1.every((k) => {
-          const value = byName.A1[k]
+          const value = (byName.A1 as unknown as Record<string, unknown>)[k]
           return value !== '' && value !== null && !(Array.isArray(value) && !value.length)
         }),
       show(keysA1),
@@ -586,7 +576,6 @@ export function runMergeReposChecks() {
     expect('按贡献者统计收录数', deepEqual(ownerCounts, { alice: 4, bob: 1 }), show(ownerCounts))
     expect('guid_map 指向生效文件', guidMap[GUID_A1.toLowerCase()] === 'alice/A1.cs', show(guidMap))
 
-    // ignore_dirs：任意深度匹配
     const skipCfg = { ...cfg, ignore_dirs: ['skipme'] }
     collected = mergeRepos.collect(workdir, skipCfg, 'owner/repo', 'main')
     const rels2 = collected.records.map(([, rel]) => rel)
@@ -602,15 +591,14 @@ export function runMergeReposChecks() {
       guidMapPath: mapOut,
     })
     expect('build 正常退出', code === 0, show(code))
-    const written = readJson(path.join(outDir, 'index.json'))
+    const written = readJson<OnlineScriptEntry[]>(path.join(outDir, 'index.json'))
     expect('站点 index.json 条目正确', written.length === 5, show(written.length))
     expect('index.html 已生成', fs.existsSync(path.join(outDir, 'index.html')))
     const rootWritten = readJson(rootOut)
     expect('根目录 json 内容一致', deepEqual(rootWritten, written))
-    const writtenMap = readJson(mapOut)
+    const writtenMap = readJson<Record<string, string>>(mapOut)
     expect('guid-map 文件已写出且内容正确', writtenMap[GUID_B2.toLowerCase()] === 'bob/B2.cs', show(writtenMap))
 
-    // 稳定可复现：再生成一次内容应完全相同（决定「无变化就不提交」是否成立）
     const again = path.join(workdir, '_out2')
     quietBuild(workdir, cfg, 'owner/repo', 'main', { outDir: again })
     expect(
@@ -623,7 +611,6 @@ export function runMergeReposChecks() {
     quietBuild(workdir, cfg, 'owner/repo', 'main', { rootJsonPath: onlyRoot })
     expect('--no-site 只写根目录 json', fs.existsSync(onlyRoot))
 
-    // 中文与空格路径需要 URL 编码
     write('alice/极佐拉加 绘图.cs', cs(GUID_A2, '中文名', 'Alice'))
     collected = mergeRepos.collect(workdir, cfg, 'owner/repo', 'main')
     const cn = collected.records.map(([, , entry]) => entry).filter((e) => e.DownloadUrl.includes('%'))
@@ -641,7 +628,6 @@ export function runMergeReposChecks() {
       }) === 1,
     )
 
-    // 第一层目录被 ignore_dirs 排除（例如放模板的 examples/）
     const first = makeTempDir('kasl_ignore_')
     try {
       fs.mkdirSync(path.join(first, 'examples'), { recursive: true })
@@ -685,21 +671,11 @@ export function runMergeReposChecks() {
   return failures
 }
 
-// --------------------------------------------------------------------------- //
-// csharp_meta：真实脚本之外的边界用例
-// --------------------------------------------------------------------------- //
-
-/**
- * 用 tests/cases/*.cs 与快照比对，锁住 C# 解析的边界行为。
- *
- * 上面两套检查只覆盖了插值原始字符串等少数几例，而 csharp_meta 真正难的地方——注释里的
- * 假特性、双美元原始插值、const 链与环引用、解析不了的插值原样保留、字符串里含 : [] ,——
- * 都在这里。快照是迁移到 Node 时生成的，当时那份实现已与 Python 版逐字节对照过 96 个文件，
- * 记录的即是已验证的行为；改动 csharp_meta 后跑一遍就能立刻发现回归。
- */
-export function runCsharpMetaChecks() {
-  const failures = []
-  const expect = (name, condition, detail = '') => {
+/** 解析器自测 */
+export function runCsharpMetaChecks(): string[] {
+  const failures: string[] = []
+  /** 断言 */
+  const expect = (name: string, condition: unknown, detail: unknown = ''): void => {
     if (condition) {
       console.log(`✅ ${name}`)
     } else {
@@ -709,7 +685,8 @@ export function runCsharpMetaChecks() {
   }
 
   const casesDir = path.join(HERE, 'cases')
-  const snapshot = readJson(path.join(HERE, 'cases.snapshot.json'))
+  // 读取快照
+  const snapshot = readJson<Record<string, unknown>>(path.join(HERE, 'cases.snapshot.json'))
 
   for (const name of Object.keys(snapshot).sort()) {
     const file = path.join(casesDir, name)
@@ -724,14 +701,15 @@ export function runCsharpMetaChecks() {
   return failures
 }
 
-/** 依次跑三套检查，返回进程退出码。 */
-export function main() {
-  const failures = []
-  for (const [title, runner] of [
+/** 自测入口 */
+export function main(): number {
+  const failures: string[] = []
+  const runners: Array<[string, () => string[]]> = [
     ['pr_review', runPrReviewChecks],
     ['merge_repos', runMergeReposChecks],
     ['csharp_meta', runCsharpMetaChecks],
-  ]) {
+  ]
+  for (const [title, runner] of runners) {
     console.log(`=== ${title} ===`)
     const failed = runner()
     failures.push(...failed)

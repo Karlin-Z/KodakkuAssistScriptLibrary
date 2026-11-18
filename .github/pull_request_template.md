@@ -2,7 +2,7 @@
 提交前请确认：
 1. 只新增 / 修改 / 删除了 .cs 文件；
 2. 每个 .cs 里有且只有一处 [ScriptType(...)]，且 guid 唯一；
-3. 已本地运行过：node .github/scripts/pr_review.mjs --owner <你的用户名> --check-cs <文件路径>.cs
+3. 已本地运行过：node .github/scripts/pr_review.ts --owner <你的用户名> --check-cs <文件路径>.cs
 4. 如果是修改别人的文件夹，请在「改动说明」里写明原因，并等待文件夹所有者回复批准命令（默认 /approve）确认。
 
 只改自己文件夹的 PR 校验通过后会自动 squash 合并；跨作者 PR 需要文件夹所有者回复批准命令后才会合并。

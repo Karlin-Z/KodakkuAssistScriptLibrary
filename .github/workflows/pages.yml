@@ -38,21 +38,33 @@ jobs:
       - name: 配置 Pages
         uses: actions/configure-pages@v6
 
-      # 审核 / 生成索引 / 前端构建现在都跑在 Node 上（前两者零依赖，不需要 npm install）
+      # 审核 / 生成索引 / 前端构建都跑在 Node 上：脚本运行时零依赖，
+      # CI 只为 tsc 类型检查安装 typescript / @types/node。
       - name: 配置 Node
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '26'
           cache: npm
-          cache-dependency-path: .github/web/package-lock.json
+          cache-dependency-path: |
+            .github/web/package-lock.json
+            .github/scripts/package-lock.json
+
+      - name: 安装脚本类型检查依赖
+        working-directory: .github/scripts
+        run: npm ci
+
+      # 类型检查不产出 JS；CI 仍由 Node 26 原生类型剥离直接运行 .ts
+      - name: 类型检查审核脚本
+        working-directory: .github/scripts
+        run: npm run typecheck
 
       # 审核/合并脚本自身的规则自测，改坏了会在这里立刻失败，避免发布错误索引
       - name: 运行内置自测
-        run: node .github/scripts/tests/selftest.mjs
+        run: node .github/scripts/tests/selftest.ts
 
       # 审批流程的本地 mock 测试：覆盖所有者批准、状态校验、DoS 短路等
       - name: 运行审批流程 mock 测试
-        run: node .github/scripts/tests/approval.mock.mjs
+        run: node .github/scripts/tests/approval.mock.ts
 
       - name: 安装前端依赖
         working-directory: .github/web
@@ -66,7 +78,7 @@ jobs:
       # 顺序不能反：vite 会清空 _site，先跑这一步 index.json 会被删掉。
       # --no-html：index.html 已经由前端产出，这里只补机器可读的索引。
       - name: 生成合并索引
-        run: node .github/scripts/merge_repos.mjs --out _site --no-html
+        run: node .github/scripts/merge_repos.ts --out _site --no-html
 
       - name: 上传站点内容
         uses: actions/upload-pages-artifact@v5
@@ -99,11 +111,11 @@ jobs:
       - name: 配置 Node
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '26'
 
       - name: 生成根目录索引与 guid 映射表
         run: |
-          node .github/scripts/merge_repos.mjs \
+          node .github/scripts/merge_repos.ts \
             --root-json OnlineRepo.json \
             --guid-map .github/index/guid-map.json \
             --no-site

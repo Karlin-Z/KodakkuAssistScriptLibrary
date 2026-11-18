@@ -1,27 +1,4 @@
-/**
- * 从 C# 源码里找到 [ScriptType(...)] 并解析它的参数。
- *
- * 零依赖，只做「语法层」的事：定位特性、切分参数、还原字符串/数组字面量；
- * 某个字段是否符合业务规则，由 pr_review.validateScriptFile 判断。
- *
- * 为什么要手写而不是用正则：特性的参数支持具名实参且顺序任意、可以跨多行，
- * 字符串里还可能出现 ")"、"," 甚至 "]"（例如 note 里写说明），正则很容易切错。
- *
- * 支持写法：
- *     [ScriptType(name: "M1s绘图", territorys: [1226], guid: "...", author: "Karlin")]
- *     [ScriptTypeAttribute("guid", "Name", new uint[] { 1226 }, "0.0.1", "Author")]
- *     [ScriptType(guid: "g", note: @"逐字""字符串", author: "A")]
- *
- * 文件结构：常量 -> 字面量读取 -> 注释屏蔽 -> 定位特性 -> 切分参数 -> 还原取值 -> 对外入口。
- *
- * 由 csharp_meta.py 移植而来（Python 版已随迁移移除），行为需保持不变，错误文案也算在内。
- */
-
-// --------------------------------------------------------------------------- //
-// 常量
-// --------------------------------------------------------------------------- //
-
-/** ScriptTypeAttribute 构造函数的参数顺序（见 Interface/ScriptAttribute.cs） */
+/** 参数顺序 */
 export const PARAM_ORDER = [
   'guid',
   'name',
@@ -32,11 +9,9 @@ export const PARAM_ORDER = [
   'updateInfo',
 ];
 
-/** 能出现在特性名末尾的两种写法 */
 const ATTRIBUTE_NAMES = new Set(['ScriptType', 'ScriptTypeAttribute']);
 
-/** 简单转义序列，以及 \u / \x / \U 的位数 */
-const SIMPLE_ESCAPES = new Map([
+const SIMPLE_ESCAPES = new Map<string, string>([
   ['n', '\n'],
   ['r', '\r'],
   ['t', '\t'],
@@ -49,46 +24,51 @@ const SIMPLE_ESCAPES = new Map([
   ['"', '"'],
   ["'", "'"],
 ]);
-const ESCAPE_WIDTHS = new Map([
+const ESCAPE_WIDTHS = new Map<string, number>([
   ['u', 4],
   ['x', 2],
   ['U', 8],
 ]);
 
 const IDENT_ANCHORED = /^[A-Za-z_][A-Za-z0-9_]*$/;
-/** 需要从指定下标开始匹配时用粘滞模式（对应 Python 的 re.match(text, pos)） */
 const IDENT_STICKY = /[A-Za-z_][A-Za-z0-9_]*/y;
-/** 从当前位置起匹配，必须锚定在开头（对应 Python 的 re.match(text, pos)） */
 const INT_LITERAL_PREFIX = /^-?(?:0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]*/;
 const INT_LITERAL_ANCHORED = /^-?(?:0[xX][0-9a-fA-F]+|[0-9]+)[uUlL]*$/;
 const HEX_ANCHORED = /^[0-9a-fA-F]+$/;
 const INT_SUFFIX_RE = /[uUlL]+$/;
 
-/** 匹配 const 声明，例如 `    private const string noteStr =` */
 const CONST_DECL_RE = /\bconst\s+([A-Za-z_][\w.]*(?:\s*<[^;=]*>)?(?:\s*\[\s*\])?)\s+([A-Za-z_]\w*)\s*=\s*/g;
 
-/** 字符串 / uint 数组字面量在 C# 里的几种写法 */
 const NEW_ARRAY_RE = /^new\s+(?:[A-Za-z_][\w.]*\s*)?\[\s*\]\s*\{(.*)\}$/s;
 const NEW_IMPLICIT_ARRAY_RE = /^new\s*\[\s*\]\s*\{(.*)\}$/s;
 
-/** 空白字符集合，与 Python 里显式列出的 " \t\r\n" 保持一致 */
 const SPACES = ' \t\r\n';
 
-// --------------------------------------------------------------------------- //
-// 小工具
-// --------------------------------------------------------------------------- //
+/** 取值类别 */
+export type DecodedKind = 'string' | 'int' | 'array' | 'null' | 'identifier' | 'unknown';
 
-/**
- * 复刻 Python 的 repr()，用于生成与 Python 版本一致的错误文案。
- *
- * 只覆盖这里用得到的字符串场景：引号选择、常见转义、控制字符走 \xXX。
- */
-export function pyRepr(value) {
+/** 取值元组 */
+export type DecodedValue = [DecodedKind, string | number | readonly number[] | null];
+
+/** const 表 */
+export type ConstantTable = Map<string, DecodedValue>;
+
+/** 特性参数表 */
+export type ScriptTypeParams = Record<string, DecodedValue>;
+
+/** 解析结果 */
+export interface ParseResult {
+  params: ScriptTypeParams;
+  errors: string[];
+}
+
+/** 模拟 repr */
+export function pyRepr(value: unknown): string {
   const text = String(value);
   const quote = text.includes("'") && !text.includes('"') ? '"' : "'";
   let out = '';
   for (const ch of text) {
-    const code = ch.codePointAt(0);
+    const code = ch.codePointAt(0) ?? 0;
     if (ch === '\\') out += '\\\\';
     else if (ch === quote) out += `\\${quote}`;
     else if (ch === '\n') out += '\\n';
@@ -100,24 +80,21 @@ export function pyRepr(value) {
   return quote + out + quote;
 }
 
-/** 空白判定，对应 Python 的 `text[i] in " \t\r\n"`。 */
-const isSpace = (ch) => ch !== undefined && SPACES.includes(ch);
+/** 判断空白字符 */
+const isSpace = (ch: string | undefined): boolean => ch !== undefined && SPACES.includes(ch);
 
-/** 是否是字符串字面量的起点（" ' 或 @"）。 */
-const startsLiteral = (text, i) =>
+/** 判断字面量起点 */
+const startsLiteral = (text: string, i: number): boolean =>
   text[i] === '"' || text[i] === "'" || (text[i] === '@' && text[i + 1] === '"');
 
-// --------------------------------------------------------------------------- //
-// 字面量读取：原样复制 / 跳过
-// --------------------------------------------------------------------------- //
-
-/** 复制被 quote 包裹的字面量（"..." 或 '...'，支持 \ 转义），返回结束后的下标。 */
-function copyQuoted(text, i, out, quote) {
+/** 复制引号字符串 */
+function copyQuoted(text: string, i: number, out: string[], quote: string): number {
   out.push(quote);
   i += 1;
   const n = text.length;
   while (i < n) {
     const ch = text[i];
+    // 处理转义
     if (ch === '\\' && i + 1 < n) {
       out.push(text.slice(i, i + 2));
       i += 2;
@@ -130,13 +107,14 @@ function copyQuoted(text, i, out, quote) {
   return i;
 }
 
-/** 从开引号处复制逐字字符串的内容（"" 表示一个引号），返回结束下标。 */
-function copyVerbatimBody(text, i, out) {
+/** 复制逐字字符串 */
+function copyVerbatimBody(text: string, i: number, out: string[]): number {
   out.push('"');
   i += 1;
   const n = text.length;
   while (i < n) {
     if (text[i] === '"') {
+      // 双引号转义
       if (i + 1 < n && text[i + 1] === '"') {
         out.push('""');
         i += 2;
@@ -152,13 +130,8 @@ function copyVerbatimBody(text, i, out) {
   return i;
 }
 
-/**
- * 复制 $ / @ 前缀字符串的原文（插值串、逐字串、插值原始串），返回结束下标。
- *
- * 前缀一起复制进去，插值与转义语义交给 decodeString 判断。
- * 不是字符串字面量（例如单独的 $ 或 @）时返回 null，且不修改 out。
- */
-function copyInterpolated(text, i, out) {
+/** 复制插值字符串 */
+function copyInterpolated(text: string, i: number, out: string[]): number | null {
   let j = i;
   while (j < text.length && (text[j] === '$' || text[j] === '@')) j += 1;
   if (j === i || j >= text.length || text[j] !== '"') return null;
@@ -169,8 +142,8 @@ function copyInterpolated(text, i, out) {
   return copyQuoted(text, j, out, '"');
 }
 
-/** 复制三引号及以上的原始字符串字面量。 */
-function copyRaw(text, i, out) {
+/** 复制原始字符串 */
+function copyRaw(text: string, i: number, out: string[]): number {
   const n = text.length;
   let j = i;
   while (j < n && text[j] === '"') j += 1;
@@ -184,24 +157,19 @@ function copyRaw(text, i, out) {
   return end + quotes.length;
 }
 
-/**
- * 从 i 开始读一个字面量的原文，返回 [原文, 结束下标]；读不到则返回 [null, i]。
- *
- * 支持普通字符串、@ 逐字字符串、$ 插值字符串（含插值原始字符串）、三引号原始字符串、
- * 单引号字符字面量、整数字面量。
- */
-function readLiteral(text, i) {
+/** 读取字面量原文 */
+function readLiteral(text: string, i: number): [string | null, number] {
   if (i >= text.length) return [null, i];
 
   const ch = text[i];
   if (ch === '$' || ch === '@') {
-    const scratch = [];
+    const scratch: string[] = [];
     const end = copyInterpolated(text, i, scratch);
     if (end !== null) return [scratch.join(''), end];
   }
 
   if (ch === '"' || ch === "'") {
-    const scratch = [];
+    const scratch: string[] = [];
     let end;
     if (ch === '"') {
       end = text.startsWith('"""', i)
@@ -218,14 +186,14 @@ function readLiteral(text, i) {
   return [null, i];
 }
 
-/** 跳过当前位置的字面量，返回结束后的下标；i 不在字面量上则原样返回。 */
-function skipLiteral(text, i) {
+/** 跳过字面量 */
+function skipLiteral(text: string, i: number): number {
   const [literal, end] = readLiteral(text, i);
   return literal !== null ? end : i;
 }
 
-/** 把注释字符替换成空格（保留换行），字符串字面量原样保留。 */
-export function stripComments(text) {
+/** 去除注释 */
+export function stripComments(text: string): string {
   const out = [];
   let i = 0;
   const n = text.length;
@@ -233,6 +201,7 @@ export function stripComments(text) {
     const ch = text[i];
     const nxt = i + 1 < n ? text[i + 1] : '';
 
+    // 行注释
     if (ch === '/' && nxt === '/') {
       while (i < n && text[i] !== '\n') {
         out.push(' ');
@@ -241,6 +210,7 @@ export function stripComments(text) {
       continue;
     }
 
+    // 块注释
     if (ch === '/' && nxt === '*') {
       out.push('  ');
       i += 2;
@@ -275,12 +245,8 @@ export function stripComments(text) {
   return out.join('');
 }
 
-// --------------------------------------------------------------------------- //
-// 定位 [ScriptType(...)]
-// --------------------------------------------------------------------------- //
-
-/** 返回与 openIndex 处 '(' 配对的 ')' 下标；不配对则返回 null。 */
-function matchParen(text, openIndex) {
+/** 匹配右括号 */
+function matchParen(text: string, openIndex: number): number | null {
   let depth = 0;
   let i = openIndex;
   const n = text.length;
@@ -300,15 +266,10 @@ function matchParen(text, openIndex) {
   return null;
 }
 
-/**
- * 返回 {arglists, errors}。
- *
- * arglists 是每处 [ScriptType(...)] 括号内的原文；写成 [ScriptType] 无参数时该元素为 null。
- * text 需要是 stripComments 之后的内容。
- */
-export function findArglists(text) {
-  const arglists = [];
-  const errors = [];
+/** 提取特性参数 */
+export function findArglists(text: string): { arglists: (string | null)[]; errors: string[] } {
+  const arglists: (string | null)[] = [];
+  const errors: string[] = [];
   let i = 0;
   const n = text.length;
 
@@ -339,13 +300,12 @@ export function findArglists(text) {
       end = nxt.index + nxt[0].length;
     }
 
-    const lastName = text.slice(start, end).split('.').pop();
+    const lastName = text.slice(start, end).split('.').pop() ?? '';
     if (!ATTRIBUTE_NAMES.has(lastName)) {
       i += 1;
       continue;
     }
 
-    // 排除 ScriptTypeHelper 这类同前缀的长标识符
     IDENT_STICKY.lastIndex = end;
     const trailing = IDENT_STICKY.exec(text);
     if (trailing) {
@@ -356,6 +316,7 @@ export function findArglists(text) {
     let cursor = end;
     while (cursor < n && isSpace(text[cursor])) cursor += 1;
 
+    // 参数列表
     if (cursor < n && text[cursor] === '(') {
       const close = matchParen(text, cursor);
       if (close === null) {
@@ -367,6 +328,7 @@ export function findArglists(text) {
       continue;
     }
 
+    // 无参数
     if (cursor < n && text[cursor] === ']') {
       arglists.push(null);
       i = cursor + 1;
@@ -379,15 +341,11 @@ export function findArglists(text) {
   return { arglists, errors };
 }
 
-// --------------------------------------------------------------------------- //
-// 切分参数
-// --------------------------------------------------------------------------- //
-
-/** 按 separator 切分，忽略括号内与字符串内的分隔符。 */
-function splitTopLevel(text, separator) {
-  const parts = [];
+/** 顶层切分 */
+function splitTopLevel(text: string, separator: string): string[] {
+  const parts: string[] = [];
   let depth = 0;
-  let current = [];
+  let current: string[] = [];
   let i = 0;
   const n = text.length;
   while (i < n) {
@@ -413,8 +371,8 @@ function splitTopLevel(text, separator) {
   return parts;
 }
 
-/** 返回顶层具名实参的 ':' 下标；没有则返回 null。 */
-function findNamedColon(text) {
+/** 查找具名冒号 */
+function findNamedColon(text: string): number | null {
   let depth = 0;
   let i = 0;
   const n = text.length;
@@ -426,9 +384,9 @@ function findNamedColon(text) {
     }
     if (ch === '(' || ch === '[' || ch === '{') depth += 1;
     else if (ch === ')' || ch === ']' || ch === '}') depth -= 1;
+    // 顶层冒号
     else if (ch === ':' && depth === 0) {
       if (i + 1 < n && text[i + 1] === ':') {
-        // 跳过 ::
         i += 2;
         continue;
       }
@@ -439,12 +397,8 @@ function findNamedColon(text) {
   return null;
 }
 
-// --------------------------------------------------------------------------- //
-// 还原取值
-// --------------------------------------------------------------------------- //
-
-/** 解析 C# 整数字面量（负号 / 十六进制 / uUlL 后缀）；不是整数字面量则返回 null。 */
-function parseIntLiteral(token) {
+/** 解析整数字面量 */
+function parseIntLiteral(token: string): number | null {
   if (!INT_LITERAL_ANCHORED.test(token)) return null;
   let body = token.replace(INT_SUFFIX_RE, '');
   const negative = body.startsWith('-');
@@ -453,24 +407,25 @@ function parseIntLiteral(token) {
   return negative ? -value : value;
 }
 
-/** 按 C# 原始字符串字面量的语义还原内容：去掉首行换行，并按结束分隔符的缩进左对齐。 */
-function decodeRawString(body) {
+/** 还原原始字符串 */
+function decodeRawString(body: string): string {
   let content = body.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
   if (content.startsWith('\n')) content = content.slice(1);
+
   const lines = content.split('\n');
   const indent = lines[lines.length - 1];
   if (indent.trim() === '') {
     return lines
       .slice(0, -1)
-      .map((line) => (line.startsWith(indent) ? line.slice(indent.length) : line))
+      .map((line: string) => (line.startsWith(indent) ? line.slice(indent.length) : line))
       .join('\n');
   }
   return lines.join('\n');
 }
 
-/** 还原普通字符串里的转义序列；遇到不认识的转义返回 null。 */
-function decodeEscapes(body) {
-  const out = [];
+/** 还原转义序列 */
+function decodeEscapes(body: string): string | null {
+  const out: string[] = [];
   let i = 0;
   const n = body.length;
   while (i < n) {
@@ -484,12 +439,13 @@ function decodeEscapes(body) {
     if (i >= n) return null;
     const esc = body[i];
     if (SIMPLE_ESCAPES.has(esc)) {
-      out.push(SIMPLE_ESCAPES.get(esc));
+      out.push(SIMPLE_ESCAPES.get(esc) as string);
       i += 1;
       continue;
     }
+    // 十六进制转义
     if (ESCAPE_WIDTHS.has(esc)) {
-      const width = ESCAPE_WIDTHS.get(esc);
+      const width = ESCAPE_WIDTHS.get(esc) as number;
       const digits = body.slice(i + 1, i + 1 + width);
       if (digits.length !== width || !HEX_ANCHORED.test(digits)) return null;
       out.push(String.fromCodePoint(parseInt(digits, 16)));
@@ -501,38 +457,38 @@ function decodeEscapes(body) {
   return out.join('');
 }
 
-/** 拆出字符串字面量的 $ / @ 前缀，返回 [前缀, 余下部分]。 */
-function splitStringPrefix(s) {
+/** 拆分字符串前缀 */
+function splitStringPrefix(s: string): [string, string] {
   let i = 0;
   while (i < s.length && (s[i] === '$' || s[i] === '@')) i += 1;
   return [s.slice(0, i), s.slice(i)];
 }
 
-/** 把插值 {标识符} 换成同文件里对应 const 的字符串值；换不了就原样保留。 */
-function resolveHole(expression, constants) {
+/** 解析插值占位 */
+function resolveHole(expression: string, constants: ConstantTable | null | undefined): string {
   const name = expression.trim();
   if (constants && IDENT_ANCHORED.test(name)) {
     const entry = constants.get(name);
-    if (entry && entry[0] === 'string') return entry[1];
+    if (entry && entry[0] === 'string') return entry[1] as string;
   }
   return `{${expression}}`;
 }
 
-/**
- * 处理插值字符串的花括号：连续两组花括号表示字面花括号，{标识符} 尝试取值替换。
- *
- * C# 用 $ 的个数决定插值定界符：一个 $ 时是 {expr}，两个 $ 时则是 {{expr}}。
- * 这里只认「单个标识符」的插值——复杂表达式原样留在文本里，总好过整段 note 丢失。
- */
-function decodeInterpolation(content, dollars, constants) {
+/** 还原插值内容 */
+function decodeInterpolation(
+  content: string,
+  dollars: number,
+  constants: ConstantTable | null | undefined,
+): string {
   if (dollars <= 0) return content;
 
   const openBrace = '{'.repeat(dollars);
   const closeBrace = '}'.repeat(dollars);
-  const out = [];
+  const out: string[] = [];
   let i = 0;
   const n = content.length;
   while (i < n) {
+    // 转义花括号
     if (content.startsWith(openBrace + openBrace, i)) {
       out.push(openBrace);
       i += openBrace.length * 2;
@@ -559,14 +515,8 @@ function decodeInterpolation(content, dollars, constants) {
   return out.join('');
 }
 
-/**
- * 把整串字符串字面量还原成 JS 字符串；不是单个字面量则返回 null。
- *
- * 支持 @ 逐字字符串、$ 插值字符串、三引号原始字符串（含插值原始字符串）。
- * 传入 constants 时，插值里的 {标识符} 会尝试用同文件 const 的值替换；替换不了的原样
- * 保留（形如 {Version}），避免整段 note 因为含插值就被判成「解析不了」而丢弃。
- */
-function decodeString(text, constants) {
+/** 还原字符串 */
+function decodeString(text: string, constants: ConstantTable | null | undefined): string | null {
   const s = text.trim();
   if (!s) return null;
 
@@ -596,14 +546,14 @@ function decodeString(text, constants) {
   return dollars === 0 ? content : decodeInterpolation(content, dollars, constants);
 }
 
-/** 还原 uint 数组字面量；不是数组或元素不是整数字面量则返回 null。 */
-function decodeIntArray(text) {
+/** 还原整数数组 */
+function decodeIntArray(text: string): number[] | null {
   const s = text.trim();
 
   if (s.startsWith('Array.Empty')) return [];
   if (s === 'null') return null;
 
-  let inner;
+  let inner: string;
   if (s.startsWith('[') && s.endsWith(']')) {
     inner = s.slice(1, -1);
   } else {
@@ -614,11 +564,11 @@ function decodeIntArray(text) {
 
   if (!inner.trim()) return [];
 
-  const values = [];
+  const values: number[] = [];
   for (const part of splitTopLevel(inner, ',')) {
     const token = part.trim();
     if (!token) continue;
-    // 负数虽然对 uint 非法，但先解析出来才能给出「超出 uint 范围」这种精确提示
+    // 先解析负数
     const value = parseIntLiteral(token);
     if (value === null) return null;
     values.push(value);
@@ -626,25 +576,20 @@ function decodeIntArray(text) {
   return values;
 }
 
-/**
- * 返回 [kind, value]，kind ∈ string / int / array / null / identifier / unknown。
- *
- * kind 为 identifier 时 value 是标识符名（本文件里没有对应的 const 声明）；
- * kind 为 unknown 时 value 是该参数值的原文，便于报错时回显给贡献者。
- */
-export function decodeValue(raw, constants) {
+/** 还原参数值 */
+export function decodeValue(raw: string, constants?: ConstantTable | null): DecodedValue {
   const s = raw.trim();
   if (!s) return ['unknown', s];
   if (s === 'null' || s === 'default') return ['null', null];
 
-  // 字面量拼接：note: "第一行" + "第二行" / note: $"v{Version}" + NoteTail
+  // 处理拼接
   const parts = splitTopLevel(s, '+');
   if (parts.length > 1) {
-    const pieces = [];
+    const pieces: string[] = [];
     for (const part of parts) {
       const [kind, value] = decodeValue(part, constants);
       if (kind !== 'string') return ['unknown', s];
-      pieces.push(value);
+      pieces.push(value as string);
     }
     return ['string', pieces.join('')];
   }
@@ -655,43 +600,47 @@ export function decodeValue(raw, constants) {
     return value !== null ? ['string', value] : ['unknown', s];
   }
 
+  // 整数字面量
   const number = parseIntLiteral(s);
   if (number !== null) return ['int', number];
 
+  // 数组字面量
   const array = decodeIntArray(s);
   if (array !== null) return ['array', array];
 
+  // 标识符引用
   if (IDENT_ANCHORED.test(s)) {
-    if (constants && constants.has(s)) return constants.get(s);
+    if (constants && constants.has(s)) return constants.get(s) as DecodedValue;
     return ['identifier', s];
   }
 
   return ['unknown', s];
 }
 
-// --------------------------------------------------------------------------- //
-// const 声明（特性里常用标识符引用长文本）
-// --------------------------------------------------------------------------- //
-
-/** 读取 const 的初值：字面量、同文件里的另一个 const，或由 + 连接的若干项。 */
-function readConstExpression(text, i, constants) {
-  const values = [];
-  const kinds = [];
+/** 读取 const */
+function readConstExpression(
+  text: string,
+  i: number,
+  constants: ConstantTable,
+): DecodedValue | null {
+  const values: Array<number | string | readonly number[] | null> = [];
+  const kinds: DecodedKind[] = [];
   let cursor = i;
   const n = text.length;
 
   for (;;) {
     while (cursor < n && isSpace(text[cursor])) cursor += 1;
     const [literal, literalEnd] = readLiteral(text, cursor);
-    let kind;
-    let decoded;
-    let end;
+    let kind: DecodedKind;
+    let decoded: DecodedValue[1];
+    let end: number;
 
     if (literal === null) {
-      // const string UpdateInfo = UpdateStr;  —— 引用同文件里的另一个 const
+      // 引用 const
       IDENT_STICKY.lastIndex = cursor;
       const reference = IDENT_STICKY.exec(text);
-      const entry = reference && constants ? constants.get(reference[0]) : undefined;
+      if (!reference) return null;
+      const entry = constants.get(reference[0]);
       if (entry === undefined) return null;
       [kind, decoded] = entry;
       end = reference.index + reference[0].length;
@@ -717,8 +666,8 @@ function readConstExpression(text, i, constants) {
   return null;
 }
 
-/** 比较 table 里已有的 [kind, value] 与新的取值是否相同。 */
-function entryEquals(existing, kind, value) {
+/** 比较取值 */
+function entryEquals(existing: DecodedValue | undefined, kind: DecodedKind, value: DecodedValue[1]): boolean {
   if (!existing || existing[0] !== kind) return false;
   const before = existing[1];
   if (Array.isArray(before) || Array.isArray(value)) {
@@ -729,26 +678,15 @@ function entryEquals(existing, kind, value) {
   return before === value;
 }
 
-/**
- * 收集文件里的 const 声明，供解析特性里的标识符实参使用。
- *
- * 真实脚本常见写法是先把长文本放进 const，再在特性里引用：
- *
- *     [ScriptType(..., updateInfo: updateInfoStr)]
- *     public class X {
- *         const string updateInfoStr = <插值原始字符串>;
- *     }
- *
- * 注意 const 可能声明在特性之后，也可能引用另一个 const（const string A = B;）或用
- * 插值（形如 $"v{Version}"），所以这里反复解析直到取值不再变化；解不出来的环引用被丢弃。
- */
-export function collectConstants(text) {
-  const decls = [];
+/** 收集 const */
+export function collectConstants(text: string): ConstantTable {
+  const decls: Array<[string, string, number]> = [];
   for (const match of text.matchAll(CONST_DECL_RE)) {
     decls.push([match[2], match[1].replaceAll(' ', ''), match.index + match[0].length]);
   }
 
-  const table = new Map();
+  const table: ConstantTable = new Map();
+  // 反复求值
   for (let round = 0; round <= decls.length; round += 1) {
     let changed = false;
     for (const [name, typeText, start] of decls) {
@@ -767,14 +705,10 @@ export function collectConstants(text) {
   return table;
 }
 
-// --------------------------------------------------------------------------- //
-// 对外入口
-// --------------------------------------------------------------------------- //
-
-/** 把括号内的原文切成 {参数名: [kind, value]}；返回 {params, errors}。 */
-export function parseArglist(arglist, constants) {
-  const params = {};
-  const errors = [];
+/** 解析参数列表 */
+export function parseArglist(arglist: string, constants: ConstantTable): ParseResult {
+  const params: ScriptTypeParams = {};
+  const errors: string[] = [];
   let positionalIndex = 0;
 
   for (const part of splitTopLevel(arglist, ',')) {
@@ -782,6 +716,7 @@ export function parseArglist(arglist, constants) {
     if (!token) continue;
 
     const colon = findNamedColon(token);
+    // 具名参数
     if (colon !== null) {
       const key = token.slice(0, colon).trim();
       if (!IDENT_ANCHORED.test(key)) {
@@ -796,6 +731,7 @@ export function parseArglist(arglist, constants) {
       continue;
     }
 
+    // 位置参数
     if (positionalIndex >= PARAM_ORDER.length) {
       errors.push(`位置参数过多（最多 ${PARAM_ORDER.length} 个）`);
       break;
@@ -812,12 +748,9 @@ export function parseArglist(arglist, constants) {
   return { params, errors };
 }
 
-/**
- * 解析源码里的 ScriptType 特性，返回 {params, errors}。
- *
- * params: {参数名: [kind, value]}，未出现的参数不在其中。
- */
-export function extractScriptType(text) {
+/** 解析脚本特性 */
+export function extractScriptType(text: string): ParseResult {
+  // 去除注释
   const stripped = stripComments(text);
   if (!stripped.trim()) return { params: {}, errors: ['文件内容为空'] };
 

@@ -19,7 +19,7 @@ public class 多变迷宫自动化
 
     private DateTime lasthealth = DateTime.Now;
 
-    [UserSetting("低于该值对自己使用治疗")] public int healthThreshold { get; set; } = 20000;
+    [UserSetting("低于该值时对自己使用治疗")] public int healthThreshold { get; set; } = 20000;
 
     [UserSetting("多变治疗栏位，左边为2右边为1")] public int healthSlot { get; set; } = 1;
 

@@ -17,41 +17,41 @@ const RELATIVE_LIMIT = 30 * DAY
  * 切换语言后会跟着重新求值 —— 不需要额外通知模板。
  */
 export function useFormat() {
-  const { t, locale } = useI18n()
+    const { t, locale } = useI18n()
 
-  const dateFormatter = computed(
-    () =>
-      new Intl.DateTimeFormat(intlLocale(locale.value), {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-      }),
-  )
+    const dateFormatter = computed(
+        () =>
+            new Intl.DateTimeFormat(intlLocale(locale.value), {
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit'
+            })
+    )
 
-  function formatDate(ts: number): string {
-    return ts ? dateFormatter.value.format(new Date(ts)) : t('common.unknown')
-  }
-
-  function formatRelative(ts: number): string {
-    if (!ts) return t('common.unknown')
-    const diff = Date.now() - ts
-    // 时间戳在将来（时钟偏差、数据写错）时按日期显示，别算出「-3 小时前」
-    if (diff < 0) return formatDate(ts)
-    if (diff < MINUTE) return t('time.justNow')
-    if (diff < HOUR) {
-      const minutes = Math.floor(diff / MINUTE)
-      return t('time.minutesAgo', { n: minutes }, minutes)
+    function formatDate(ts: number): string {
+        return ts ? dateFormatter.value.format(new Date(ts)) : t('common.unknown')
     }
-    if (diff < DAY) {
-      const hours = Math.floor(diff / HOUR)
-      return t('time.hoursAgo', { n: hours }, hours)
-    }
-    if (diff < RELATIVE_LIMIT) {
-      const days = Math.floor(diff / DAY)
-      return t('time.daysAgo', { n: days }, days)
-    }
-    return formatDate(ts)
-  }
 
-  return { formatDate, formatRelative }
+    function formatRelative(ts: number): string {
+        if (!ts) return t('common.unknown')
+        const diff = Date.now() - ts
+        // 时间戳在将来（时钟偏差、数据写错）时按日期显示，别算出「-3 小时前」
+        if (diff < 0) return formatDate(ts)
+        if (diff < MINUTE) return t('time.justNow')
+        if (diff < HOUR) {
+            const minutes = Math.floor(diff / MINUTE)
+            return t('time.minutesAgo', { n: minutes }, minutes)
+        }
+        if (diff < DAY) {
+            const hours = Math.floor(diff / HOUR)
+            return t('time.hoursAgo', { n: hours }, hours)
+        }
+        if (diff < RELATIVE_LIMIT) {
+            const days = Math.floor(diff / DAY)
+            return t('time.daysAgo', { n: days }, days)
+        }
+        return formatDate(ts)
+    }
+
+    return { formatDate, formatRelative }
 }

@@ -12,25 +12,25 @@ const { t } = useI18n()
 const { state, copy } = useCopy()
 
 const LABEL = computed(() => ({
-  idle: t('common.copyAddress'),
-  copied: t('common.copied'),
-  failed: t('common.copyFailed'),
+    idle: t('common.copyAddress'),
+    copied: t('common.copied'),
+    failed: t('common.copyFailed')
 }))
 </script>
 
 <template>
-  <div class="rounded-xl border border-line-soft bg-surface p-4">
-    <div class="mb-2.5 flex items-center justify-between gap-3">
-      <span class="text-[13px] font-medium">{{ label }}</span>
-      <AppButton size="sm" @click="copy(props.value)">
-        <AppIcon :name="state === 'copied' ? 'check' : 'copy'" />
-        {{ LABEL[state] }}
-      </AppButton>
+    <div class="rounded-xl border border-line-soft bg-surface p-4">
+        <div class="mb-2.5 flex items-center justify-between gap-3">
+            <span class="text-[13px] font-medium">{{ label }}</span>
+            <AppButton size="sm" @click="copy(props.value)">
+                <AppIcon :name="state === 'copied' ? 'check' : 'copy'" />
+                {{ LABEL[state] }}
+            </AppButton>
+        </div>
+        <code
+            class="block rounded-lg border border-line-soft bg-code px-3 py-2 font-mono text-[12.5px] text-fg-muted select-all break-all"
+            >{{ value }}</code
+        >
+        <p v-if="props.hint" class="mt-2.5 text-[12.5px] text-fg-muted">{{ hint }}</p>
     </div>
-    <code
-      class="block rounded-lg border border-line-soft bg-code px-3 py-2 font-mono text-[12.5px] text-fg-muted select-all break-all"
-      >{{ value }}</code
-    >
-    <p v-if="props.hint" class="mt-2.5 text-[12.5px] text-fg-muted">{{ hint }}</p>
-  </div>
 </template>

@@ -9,11 +9,13 @@ import { useI18n } from 'vue-i18n'
  * 搜索引擎抓到的也是简体中文那份（静态托管没有按语言分路由，这是已知取舍）。
  */
 export function useDocumentMeta(): void {
-  const { t, locale } = useI18n()
+    const { t, locale } = useI18n()
 
-  watchEffect(() => {
-    document.documentElement.lang = locale.value
-    document.title = t('meta.title')
-    document.querySelector('meta[name="description"]')?.setAttribute('content', t('meta.description'))
-  })
+    watchEffect(() => {
+        document.documentElement.lang = locale.value
+        document.title = t('meta.title')
+        document
+            .querySelector('meta[name="description"]')
+            ?.setAttribute('content', t('meta.description'))
+    })
 }

@@ -53,7 +53,7 @@ public class MyScript
 | `name` | string | 否 | `Default Script` | 脚本显示名 |
 | `territorys` | uint[] | 否 | 空 | 生效的区域 ID（TerritoryType）；空表示所有区域 |
 | `version` | string | 否 | `0.0.0.1` | 版本号，与在线库比较后提示更新 |
-| `author` | string | 否 | `Unknown` | 作者 |
+| `author` | string | 否 | `Unknown` | 作者；联合作者用 `作者a & 作者b` 的格式（带空格） |
 | `note` | string | 否 | 空 | 备注，显示给用户 |
 | `updateInfo` | string | 否 | 空 | 更新说明 |
 

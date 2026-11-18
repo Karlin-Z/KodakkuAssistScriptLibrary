@@ -12,7 +12,6 @@
 1. Fork 本仓库。
 2. 在**仓库根目录**新建以你的 GitHub 用户名命名的文件夹。
 	> - 例如 `Karlin-Z/`；用户名不区分大小写，建议完全一致
-	> - 如果是联合作者，则用 `作者a & 作者b` 的格式（带空格）
 3. 把 `.cs` 文件放进去。**一个 `.cs` 文件必须包含且只包含一处 `[ScriptType(...)]`**。
 4. 向 `main` 分支提交 Pull Request。
 
@@ -31,14 +30,14 @@
 
 ## 脚本编写说明
 
-- 更多脚本编写说明请参考： [脚本说明书](script-writing-guide.md) 
+- 更多脚本编写说明请参考： [脚本说明书](script-writing-guide.md)
 
 
 ### 脚本模板
 
 - `SimpleScript.cs` 是官方示例，可直接复制来改。
 
-- **复制时务必改掉 `guid`**：  [GUID生成器](https://www.iamwawa.cn/guid.html) 
+- **复制时务必改掉 `guid`**：  [GUID生成器](https://www.iamwawa.cn/guid.html)
 
 ```csharp
 [ScriptType(name: "M1s绘图", territorys: [1226], guid: "8010d865-7d6d-4c23-92e0-f4b0120e18ac",version: "0.0.0.9", author: "Karlin")]
@@ -53,7 +52,7 @@ public class M1s { }
 | `name` | string | 建议 | 脚本名，缺省为 `Default Script` |
 | `territorys` | uint[] | 建议 | 生效地图 ID，如 `[1226]`；空数组或缺省表示不按地图过滤 |
 | `version` | string | 建议 | 版本号，缺省为 `0.0.0.1`；插件用 `NuGetVersion` 解析，`0.0.1` / `0.0.0.9` / `1.0.0-beta` 均可 |
-| `author` | string | 否 | 缺省、留空或写成 `Unknown` 时，自动使用你的**文件夹名** |
+| `author` | string | 否 | 缺省、留空或写成 `Unknown` 时，自动使用你的**文件夹名**；联合作者用 `作者a & 作者b` 的格式（带空格） |
 | `note` | string | 否 | 备注（鼠标悬停显示） |
 | `updateInfo` | string | 否 | 更新说明 |
 

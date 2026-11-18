@@ -16,14 +16,14 @@ useDocumentMeta()
 </script>
 
 <template>
-  <div id="top">
-    <SiteHeader />
-    <main>
-      <HomeSection />
-      <ExamplesSection />
-      <StartSection />
-      <ContributeSection />
-    </main>
-    <SiteFooter />
-  </div>
+    <div id="top">
+        <SiteHeader />
+        <main>
+            <HomeSection />
+            <ExamplesSection />
+            <StartSection />
+            <ContributeSection />
+        </main>
+        <SiteFooter />
+    </div>
 </template>

@@ -10,21 +10,21 @@ const HOLD_MS = 2000
  * 让用户手动选中文本，不静默失败。
  */
 export function useCopy() {
-  const state = ref<CopyState>('idle')
-  let timer: number | undefined
+    const state = ref<CopyState>('idle')
+    let timer: number | undefined
 
-  async function copy(text: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text)
-      state.value = 'copied'
-    } catch {
-      state.value = 'failed'
+    async function copy(text: string): Promise<void> {
+        try {
+            await navigator.clipboard.writeText(text)
+            state.value = 'copied'
+        } catch {
+            state.value = 'failed'
+        }
+        window.clearTimeout(timer)
+        timer = window.setTimeout(() => {
+            state.value = 'idle'
+        }, HOLD_MS)
     }
-    window.clearTimeout(timer)
-    timer = window.setTimeout(() => {
-      state.value = 'idle'
-    }, HOLD_MS)
-  }
 
-  return { state, copy }
+    return { state, copy }
 }

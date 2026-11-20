@@ -29,6 +29,25 @@
 
 
 
+## 本地开发环境
+
+1. 安装 .NET 10 SDK；
+2. 安装可达鸭插件和 Dalamud；
+3. 用 VS Code（C# Dev Kit）或 Rider 打开，即可获得类型提示、跳转和错误检查。
+
+项目会自动探测：
+
+- 根目录 `local.props` 里的 `KaPluginDir`
+- `%APPDATA%\XIVLauncherCN\installedPlugins\KodakkuAssist\*\`（或 `XIVLauncher`）
+- 同级仓库的 `KodakkuAssist\KodakkuAssist\bin\Debug\net10.0-windows\`
+- 本目录 `refs\`
+
+Dalamud 从 `%APPDATA%\XIVLauncherCN\addon\Hooks\dev\`（或 `XIVLauncher`）自动探测。
+
+脚本默认按已安装插件编译；如果你在本地编译插件、想对着 Debug 产物写脚本，在根目录新建 `local.props`，设置 `KaPluginDir` 指向包含 `KodakkuAssist.dll` 的 Debug 输出目录（结尾分隔符可省略）；`local.props` 不会入库。
+
+新增作者目录时，复制任意现有作者的 `.csproj`（例如 `Karlin-Z/Karlin-Z.csproj`）到新目录并改名为 `<用户名>.csproj`。
+
 ## 脚本编写说明
 
 - 更多脚本编写说明请参考： [脚本说明书](script-writing-guide.md)
@@ -85,7 +104,7 @@ YourName/副本名/
 1. 改动路径的第一层文件夹必须等于 PR 作者的 GitHub 用户名；重命名时，改名前后两个路径都要满足。
    - 不满足时不会直接拒绝，而是转为「待人工审核」，见下面的「修改别人的脚本」。
    - 一个 PR 最多只能修改一个别人的文件夹；同时修改多个会直接判为不通过，请拆成多个 PR。
-2. 只允许新增 / 修改 / 删除 `.cs` 文件。
+2. 只允许新增 / 修改 / 删除 `.cs` 文件，以及作者目录根下与目录同名的 `.csproj`（复制任意现有作者的项目文件，不要修改内容）。
 3. 每个脚本的主文件必须包含**恰好一处** `[ScriptType(...)]`（或 `[ScriptTypeAttribute(...)]`）：
    - 主文件一处都没有，或出现两处及以上 → 拒绝（注释、字符串里的写法不计入）；
    - 多文件脚本的 part 文件必须是同一文件夹下的同名 `partial` 类型声明，且不能写 `[ScriptType]`；

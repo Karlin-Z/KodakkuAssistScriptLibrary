@@ -1,7 +1,7 @@
 {
     "username_case_insensitive": true,
     "allow_subfolders": true,
-    "allowed_extensions": [".cs"],
+    "allowed_extensions": [".cs", ".csproj"],
     "max_files_per_pr": 100,
     "ignore_dirs": [],
     "maintainers": [],

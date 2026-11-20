@@ -27,7 +27,7 @@ export const CANONICAL_FIELD_ORDER = [
 ]
 
 /** 排除目录 */
-const EXCLUDED_DIRS = new Set(['.git', 'node_modules'])
+const EXCLUDED_DIRS = new Set(['.git', 'node_modules', 'bin', 'obj'])
 
 /** 索引条目 */
 export interface OnlineScriptEntry {

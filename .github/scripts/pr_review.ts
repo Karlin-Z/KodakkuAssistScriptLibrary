@@ -171,7 +171,7 @@ export interface ReviewOutcome {
 export const DEFAULT_CONFIG: ReviewConfig = {
     username_case_insensitive: true,
     allow_subfolders: true,
-    allowed_extensions: ['.cs'],
+    allowed_extensions: ['.cs', '.csproj'],
     max_files_per_pr: 100,
     ignore_dirs: [],
     maintainers: [],
@@ -402,11 +402,20 @@ export function check_path_rules(
     }
 
     // 扩展名限制
-    const extensions = (cfg.allowed_extensions ?? ['.cs']).map((e) => String(e).toLowerCase())
+    const extensions = (cfg.allowed_extensions ?? ['.cs', '.csproj']).map((e) =>
+        String(e).toLowerCase()
+    )
     const filename = parts[parts.length - 1]
     const filenameLower = filename.toLowerCase()
     if (!extensions.some((ext) => filenameLower.endsWith(ext))) {
         errors.push(`${ctx}：只允许 ${extensions.join(' / ')} 文件，${pyReprAny(filename)} 不合法`)
+    }
+
+    // 项目文件只能放作者目录根下
+    if (filenameLower.endsWith('.csproj')) {
+        if (parts.length !== 2 || filenameLower !== `${folder.toLowerCase()}.csproj`) {
+            errors.push(`${ctx}：项目文件必须是 ${folder}/${folder}.csproj，放在作者目录根下`)
+        }
     }
 }
 
@@ -933,6 +942,44 @@ export function validate_script_directory(
     }
 
     return { groups, errors, warnings }
+}
+
+/** 作者项目模板 */
+export const PROJECT_TEMPLATE = `<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KodakkuScripts.$(MSBuildProjectName)</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildProjectDirectory)\\**\\*.cs" Exclude="$(MSBuildProjectDirectory)\\bin\\**;$(MSBuildProjectDirectory)\\obj\\**" />
+  </ItemGroup>
+</Project>
+`
+
+/** 校验作者项目文件 */
+function validate_project_file(text: string, file_path: string): string[] {
+    const errors: string[] = []
+    const parts = file_path.split('/')
+    const folder = parts[0] ?? ''
+    if (parts.length !== 2 || parts[1].toLowerCase() !== `${folder.toLowerCase()}.csproj`)
+        errors.push(`${file_path}：项目文件必须放在作者目录根下，且与目录同名`)
+
+    if (normalize_project_text(text) !== normalize_project_text(PROJECT_TEMPLATE))
+        errors.push(`${file_path}：请直接复制其他作者的 .csproj，不要修改内容`)
+
+    return errors
+}
+
+/** 规范化项目文件 */
+function normalize_project_text(text: string): string {
+    return text
+        .replace(/^\uFEFF/, '')
+        .replaceAll('\r\n', '\n')
+        .trim()
+}
+
+/** 校验项目文件别名 */
+export function validateProjectFile(text: string, file_path: string): string[] {
+    return validate_project_file(text, file_path)
 }
 
 /** 校验目录别名 */
@@ -1813,11 +1860,18 @@ async function review_pull_request(
                 errors.push(`${filePath}：${fetch_error}`)
                 continue
             }
+            let text: string
             try {
-                pr_files.set(filePath, utf8DecodeStrict(data as Buffer))
+                text = utf8DecodeStrict(data as Buffer)
             } catch (exc) {
                 errors.push(`${filePath}：不是合法的 UTF-8 编码（${exc}）`)
+                continue
             }
+            if (path.posix.extname(filePath).toLowerCase() === '.csproj') {
+                errors.push(...validate_project_file(text, filePath))
+                continue
+            }
+            pr_files.set(filePath, text)
         }
 
         const directories = new Set(

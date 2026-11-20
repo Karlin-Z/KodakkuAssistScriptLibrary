@@ -505,6 +505,33 @@ export function runPrReviewChecks(): string[] {
         show(changeResult.errors)
     )
 
+    let projErrors: string[] = []
+    prReview.checkPathRules('alice/alice.csproj', 'alice', cfg, projErrors, '路径')
+    expect('作者目录同名 csproj 通过', !projErrors.length, show(projErrors))
+
+    projErrors = []
+    prReview.checkPathRules('alice/other.csproj', 'alice', cfg, projErrors, '路径')
+    expect('不同名 csproj 被拒绝', projErrors.length > 0, show(projErrors))
+
+    projErrors = []
+    prReview.checkPathRules('alice/sub/alice.csproj', 'alice', cfg, projErrors, '路径')
+    expect('子目录 csproj 被拒绝', projErrors.length > 0, show(projErrors))
+
+    expect(
+        '项目文件模板通过',
+        !prReview.validateProjectFile(prReview.PROJECT_TEMPLATE, 'alice/alice.csproj').length
+    )
+    expect(
+        '修改过的项目文件被拒绝',
+        prReview.validateProjectFile(
+            prReview.PROJECT_TEMPLATE.replace(
+                'KodakkuScripts.$(MSBuildProjectName)',
+                'KodakkuScripts.Hacked'
+            ),
+            'alice/alice.csproj'
+        ).length > 0
+    )
+
     const probe = prReview.defaultConfig()
     probe.maintainers.push('__probe__')
     expect('default_config 返回深拷贝', deepEqual(prReview.DEFAULT_CONFIG.maintainers, []))

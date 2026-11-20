@@ -314,6 +314,8 @@ export function findArglists(text: string): { arglists: (string | null)[]; error
             const close = matchParen(text, cursor)
             if (close === null) {
                 errors.push('特性的括号不匹配')
+                // 标记找到特性
+                arglists.push(null)
                 return { arglists, errors }
             }
             arglists.push(text.slice(cursor + 1, close))
@@ -745,6 +747,208 @@ export function parseArglist(arglist: string, constants: ConstantTable): ParseRe
     }
 
     return { params, errors }
+}
+
+const TYPE_DECL_KEYWORDS = new Set(['class', 'struct', 'interface', 'record'])
+const TYPE_MODIFIERS = new Set(
+    'public private protected internal static abstract sealed readonly unsafe new file ref partial'.split(
+        ' '
+    )
+)
+const IDENT_START_RE = /[A-Za-z_]/
+
+/** 扫描作用域 */
+interface TypeScope {
+    name: string
+    depth: number
+}
+
+/** 读取标识符 */
+function readIdentifier(text: string, start: number): { name: string; end: number } | null {
+    IDENT_STICKY.lastIndex = start
+    const match = IDENT_STICKY.exec(text)
+    if (!match) return null
+    return { name: match[0], end: start + match[0].length }
+}
+
+/** 读取限定名 */
+function readQualifiedName(text: string, start: number): { name: string; end: number } | null {
+    const first = readIdentifier(text, start)
+    if (!first) return null
+    let name = first.name
+    let end = first.end
+    while (end < text.length && text[end] === '.') {
+        const next = readIdentifier(text, end + 1)
+        if (!next) break
+        name += `.${next.name}`
+        end = next.end
+    }
+    return { name, end }
+}
+
+/** 跳过空白 */
+function skipSpaces(text: string, start: number): number {
+    let cursor = start
+    while (cursor < text.length && isSpace(text[cursor])) cursor += 1
+    return cursor
+}
+
+/** 读取类型名 */
+function readTypeName(
+    text: string,
+    start: number,
+    keyword: string
+): { name: string; end: number } | null {
+    let cursor = start
+    if (keyword === 'record') {
+        const modifier = readIdentifier(text, skipSpaces(text, cursor))
+        if (modifier && (modifier.name === 'class' || modifier.name === 'struct')) {
+            cursor = modifier.end
+        }
+    }
+    const name = readIdentifier(text, skipSpaces(text, cursor))
+    if (!name) return null
+    return { name: name.name, end: name.end }
+}
+
+/** 读取 partial 声明 */
+function readPartialDeclaration(text: string, start: number): { name: string; end: number } | null {
+    let cursor = start
+    for (;;) {
+        cursor = skipSpaces(text, cursor)
+        const token = readIdentifier(text, cursor)
+        if (!token) return null
+        if (TYPE_DECL_KEYWORDS.has(token.name)) {
+            return readTypeName(text, token.end, token.name)
+        }
+        if (!TYPE_MODIFIERS.has(token.name)) return null
+        cursor = token.end
+    }
+}
+
+/** 拼接完整类型名 */
+function buildFullName(fileNamespace: string, scopes: TypeScope[], typeName: string): string {
+    return [fileNamespace, ...scopes.map((scope) => scope.name), typeName].filter(Boolean).join('.')
+}
+
+/** 提取 partial 类型全名 */
+export function extractPartialTypes(text: string): { names: string[]; errors: string[] } {
+    if (!text.includes('partial')) return { names: [], errors: [] }
+
+    const stripped = stripComments(text)
+    const names: string[] = []
+    const scopes: TypeScope[] = []
+    let fileNamespace = ''
+    let depth = 0
+    let pendingType: string | null = null
+    let i = 0
+    const n = stripped.length
+
+    while (i < n) {
+        const ch = stripped[i]
+
+        if (startsLiteral(stripped, i)) {
+            i = skipLiteral(stripped, i)
+            continue
+        }
+
+        // 跳过预处理行
+        if (ch === '#') {
+            while (i < n && stripped[i] !== '\n') i += 1
+            continue
+        }
+
+        if (ch === '{') {
+            depth += 1
+            if (pendingType) {
+                scopes.push({ name: pendingType, depth })
+                pendingType = null
+            }
+            i += 1
+            continue
+        }
+
+        if (ch === '}') {
+            while (scopes.length && scopes[scopes.length - 1].depth === depth) scopes.pop()
+            depth = Math.max(0, depth - 1)
+            i += 1
+            continue
+        }
+
+        if (ch === ';') {
+            pendingType = null
+            i += 1
+            continue
+        }
+
+        if (!IDENT_START_RE.test(ch)) {
+            i += 1
+            continue
+        }
+
+        const ident = readIdentifier(stripped, i)
+        if (!ident) {
+            i += 1
+            continue
+        }
+        const end = ident.end
+
+        if (ident.name === 'namespace') {
+            const qualified = readQualifiedName(stripped, skipSpaces(stripped, end))
+            if (!qualified) {
+                i = end
+                continue
+            }
+            const after = skipSpaces(stripped, qualified.end)
+            if (stripped[after] === ';') {
+                fileNamespace = qualified.name
+                i = after + 1
+                continue
+            }
+            if (stripped[after] === '{') {
+                depth += 1
+                scopes.push({ name: qualified.name, depth })
+                i = after + 1
+                continue
+            }
+            i = qualified.end
+            continue
+        }
+
+        if (ident.name === 'partial') {
+            const decl = readPartialDeclaration(stripped, end)
+            if (decl) {
+                names.push(buildFullName(fileNamespace, scopes, decl.name))
+                pendingType = decl.name
+                i = decl.end
+                continue
+            }
+            i = end
+            continue
+        }
+
+        if (TYPE_DECL_KEYWORDS.has(ident.name)) {
+            const decl = readTypeName(stripped, end, ident.name)
+            if (decl) {
+                pendingType = decl.name
+                i = decl.end
+                continue
+            }
+        }
+
+        i = end
+    }
+
+    return { names: [...new Set(names)], errors: [] }
+}
+
+/** 是否声明了 [ScriptType] */
+export function hasScriptTypeAttribute(text: string): boolean {
+    if (!text.includes('ScriptType')) return false
+    const stripped = stripComments(text)
+    if (!stripped.trim()) return false
+    const { arglists } = findArglists(stripped)
+    return arglists.length > 0
 }
 
 /** 解析脚本特性 */

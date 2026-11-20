@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url'
 
 import * as prReview from './pr_review.ts'
 import type { ReviewConfig, ScriptMeta } from './pr_review.ts'
+import { analyzeFile, groupFiles } from './script_group.ts'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 export const REPO_ROOT_DEFAULT = path.resolve(SCRIPT_DIR, '../..')
@@ -18,6 +19,7 @@ export const CANONICAL_FIELD_ORDER = [
     'Version',
     'Author',
     'DownloadUrl',
+    'Parts',
     'Note',
     'UpdateInfo',
     'UpdateTime',
@@ -34,6 +36,7 @@ export interface OnlineScriptEntry {
     Version: string
     Author: string
     DownloadUrl: string
+    Parts?: string[]
     Repo?: string
     Note?: string
     UpdateInfo?: string
@@ -184,11 +187,11 @@ export function downloadUrl(repo: string, branch: string, relPath: string): stri
 }
 
 /** 提交时间戳 */
-function commitEpoch(repoRoot: string, relPath: string): number | null {
+function commitEpoch(repoRoot: string, relPaths: string[]): number | null {
     try {
         const stdout = execFileSync(
             'git',
-            ['-C', repoRoot, 'log', '-1', '--format=%ct', '--', relPath],
+            ['-C', repoRoot, 'log', '-1', '--format=%ct', '--', ...relPaths],
             {
                 encoding: 'utf8',
                 timeout: 10_000,
@@ -203,14 +206,23 @@ function commitEpoch(repoRoot: string, relPath: string): number | null {
 }
 
 /** 计算更新时间 */
-export function lastUpdateTime(repoRoot: string, relPath: string): string {
-    let epoch = commitEpoch(repoRoot, relPath)
+export function lastUpdateTime(repoRoot: string, relPath: string | string[]): string {
+    const paths = Array.isArray(relPath) ? relPath : [relPath]
+    let epoch = commitEpoch(repoRoot, paths)
     if (epoch === null) {
-        try {
-            epoch = Math.floor(fs.statSync(path.join(repoRoot, relPath)).mtimeMs / 1000)
-        } catch {
-            return ''
+        let latest = 0
+        for (const rel of paths) {
+            try {
+                latest = Math.max(
+                    latest,
+                    Math.floor(fs.statSync(path.join(repoRoot, rel)).mtimeMs / 1000)
+                )
+            } catch {
+                // 单个文件取不到就跳过
+            }
         }
+        if (!latest) return ''
+        epoch = latest
     }
     return new Date(epoch * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z')
 }
@@ -221,7 +233,8 @@ export function buildEntry(
     repo: string,
     branch: string,
     relPath: string,
-    updateTime: string
+    updateTime: string,
+    parts: string[] = []
 ): OnlineScriptEntry {
     const entry: Record<string, unknown> = {
         Name: meta.name,
@@ -229,6 +242,7 @@ export function buildEntry(
         Version: meta.version,
         Author: meta.author,
         DownloadUrl: downloadUrl(repo, branch, relPath),
+        Parts: parts.map((part) => downloadUrl(repo, branch, part)),
         Note: meta.note,
         UpdateInfo: meta.update_info,
         UpdateTime: updateTime,
@@ -258,6 +272,8 @@ export function collect(
     const warnings: string[] = []
     const fileCounts: OwnerCounts = Object.create(null)
 
+    const buckets = new Map<string, Array<{ owner: string; rel: string; text: string }>>()
+
     for (const [owner, rel] of discoverFiles(repoRoot, cfg.ignore_dirs)) {
         fileCounts[owner] = (fileCounts[owner] ?? 0) + 1
 
@@ -279,21 +295,61 @@ export function collect(
             continue
         }
 
-        // 校验脚本
-        const {
-            meta,
-            errors,
-            warnings: fileWarnings
-        } = prReview.validateScriptFile(text, rel, owner, cfg)
-        warnings.push(...fileWarnings)
-        // 跳过不合规
-        if (errors.length || meta === null) {
-            skipped.push([rel, errors.length ? errors : ['无法解析出脚本信息']])
-            continue
+        const dir = path.posix.dirname(rel)
+        const bucket = buckets.get(dir) ?? []
+        bucket.push({ owner, rel, text })
+        buckets.set(dir, bucket)
+    }
+
+    for (const bucket of buckets.values()) {
+        const byRel = new Map(bucket.map((file) => [file.rel, file]))
+        const grouping = groupFiles(bucket.map((file) => analyzeFile(file.rel, file.text)))
+
+        for (const group of grouping.groups) {
+            const mainFile = byRel.get(group.main.rel)
+            if (!mainFile) continue
+
+            const {
+                meta,
+                errors,
+                warnings: fileWarnings
+            } = prReview.validateScriptFile(mainFile.text, mainFile.rel, mainFile.owner, cfg)
+            warnings.push(...fileWarnings)
+            if (errors.length || meta === null) {
+                skipped.push([mainFile.rel, errors.length ? errors : ['无法解析出脚本信息']])
+                continue
+            }
+
+            const partPaths = group.parts.map((part) => part.rel)
+            const updateTime = lastUpdateTime(repoRoot, [mainFile.rel, ...partPaths])
+            records.push([
+                mainFile.owner,
+                mainFile.rel,
+                buildEntry(meta, repo, branch, mainFile.rel, updateTime, partPaths)
+            ])
         }
 
-        const updateTime = lastUpdateTime(repoRoot, rel)
-        records.push([owner, rel, buildEntry(meta, repo, branch, rel, updateTime)])
+        for (const file of grouping.orphans)
+            skipped.push([
+                file.rel,
+                ['partial 文件缺少同目录的主文件（主文件必须带 [ScriptType]）']
+            ])
+
+        for (const file of grouping.conflicts)
+            skipped.push([
+                file.rel,
+                ['同一 partial 类型的多个文件都声明了 [ScriptType]，只能保留一处']
+            ])
+
+        for (const file of grouping.none) {
+            const { errors } = prReview.validateScriptFile(
+                file.text,
+                file.rel,
+                byRel.get(file.rel)?.owner ?? '',
+                cfg
+            )
+            skipped.push([file.rel, errors.length ? errors : ['无法解析出脚本信息']])
+        }
     }
 
     return { records, skipped, warnings, fileCounts }
@@ -336,13 +392,10 @@ export function mergeRecords(records: Array<[string, string, OnlineScriptEntry]>
 }
 
 /** 渲染贡献者表 */
-export function renderTable(ownerCounts: OwnerCounts, fileCounts: OwnerCounts): string {
-    const rows = ['<table>', '<tr><th>贡献者</th><th>脚本文件</th><th>收录脚本</th></tr>']
+export function renderTable(ownerCounts: OwnerCounts): string {
+    const rows = ['<table>', '<tr><th>贡献者</th><th>收录脚本</th></tr>']
     for (const owner of Object.keys(ownerCounts).sort()) {
-        rows.push(
-            `<tr><td>${owner}</td><td>${fileCounts[owner] ?? 0}</td>` +
-                `<td>${ownerCounts[owner]}</td></tr>`
-        )
+        rows.push(`<tr><td>${owner}</td><td>${ownerCounts[owner]}</td></tr>`)
     }
     rows.push('</table>')
     return rows.join('\n')
@@ -369,13 +422,12 @@ export function renderProblems(conflicts: Conflict[], skipped: SkippedFile[]): s
 export function renderHtml(
     merged: OnlineScriptEntry[],
     ownerCounts: OwnerCounts,
-    fileCounts: OwnerCounts,
     conflicts: Conflict[],
     skipped: SkippedFile[]
 ): string {
     return INDEX_HTML_TEMPLATE.replaceAll('{ENTRY_COUNT}', String(merged.length))
         .replaceAll('{OWNER_COUNT}', String(Object.keys(ownerCounts).length))
-        .replaceAll('{TABLE}', renderTable(ownerCounts, fileCounts))
+        .replaceAll('{TABLE}', renderTable(ownerCounts))
         .replaceAll('{PROBLEMS}', renderProblems(conflicts, skipped))
         .replaceAll('{GENERATED_AT}', formatUtcMinute(new Date()))
 }
@@ -584,7 +636,7 @@ export function build(
     let html
     if (noHtml) html = ''
     else if (rootJsonMode) html = payload
-    else html = renderHtml(merged, ownerCounts, fileCounts, conflicts, skipped)
+    else html = renderHtml(merged, ownerCounts, conflicts, skipped)
 
     writeOutputs(dest, payload, guidMap, html)
     emitReport([merged, fileCounts, ownerCounts, conflicts, skipped, warnings], dest, noHtml)

@@ -423,8 +423,29 @@ public void OnTimelineEvent(Event @event, ScriptAccessory accessory) { }
 
 不用 MCP 时，也可以在 IDE 里引用插件目录下的 `KodakkuAssist.dll`，同目录的 `KodakkuAssist.xml` 会提供智能提示与注释。
 
+## 多文件脚本
+
+脚本太大时可以拆成多个文件。插件按「同一目录 + 同名 `partial` 类型」合并编译：
+
+- 所有文件放在同一个目录；
+- 每个文件都写 `partial class 脚本类名`，命名空间保持一致；
+- 只有主文件写 `[ScriptType(...)]`；
+- 每个部分的 `using` 必须自己写全，`using` 不能跨文件生效；
+- 不要跨目录拆 `partial`：插件下载后会平铺到同一目录，脚本库也只按同目录聚合。
+
+```
+MyRaid/
+    MyRaidScript.cs        // [ScriptType(...)] + partial class MyRaidScript
+    MyRaidScript.P1.cs     // partial class MyRaidScript
+    MyRaidScript.P2.cs     // partial class MyRaidScript
+```
+
+在线库上传时保持这个目录结构即可，索引会自动把主文件之外的 `.cs` 写进 `Parts`。
+
+脚本库只做静态检查、不编译代码，part 文件里的语法错误提交时发现不了，拆完至少本地用 `compile_script` / `lint_script` 或在游戏内加载一次。
+
 ## 提交到本库
 
-- 一个 `.cs` 只放一个脚本类。
+- 单文件脚本一个 `.cs` 只放一个脚本类；多文件脚本按上面「多文件脚本」的约定拆。
 - guid 必须唯一；更新脚本时保持 guid 不变、递增 `version`，并写 `updateInfo`。
 - 提交前至少用 `compile_script` / `lint_script` 过一遍，或在游戏内本地加载确认无报错。

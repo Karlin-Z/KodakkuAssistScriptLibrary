@@ -509,6 +509,116 @@ export function runPrReviewChecks(): string[] {
     probe.maintainers.push('__probe__')
     expect('default_config 返回深拷贝', deepEqual(prReview.DEFAULT_CONFIG.maintainers, []))
 
+    const multiMain =
+        `namespace MultiNs;\n[ScriptType(guid: "${GUID}", name: "Multi", version: "0.0.0.1", ` +
+        'author: "A")]\npublic partial class Multi { }\n'
+    const multiPart = 'namespace MultiNs;\npublic partial class Multi { public void A() { } }\n'
+
+    let dirResult = prReview.validateScriptDirectory(
+        [
+            { rel_path: 'alice/Multi/Main.cs', text: multiMain },
+            { rel_path: 'alice/Multi/P1.cs', text: multiPart }
+        ],
+        cfg
+    )
+    expect(
+        '目录校验识别多文件组',
+        dirResult.groups.length === 1 &&
+            dirResult.groups[0].parts.length === 1 &&
+            !dirResult.errors.length,
+        show(dirResult)
+    )
+    expect(
+        '多文件组主文件信息正确',
+        dirResult.groups[0]?.meta?.name === 'Multi',
+        show(dirResult.groups[0]?.meta)
+    )
+
+    dirResult = prReview.validateScriptDirectory(
+        [{ rel_path: 'alice/Orphan/Part.cs', text: multiPart }],
+        cfg
+    )
+    expect(
+        '孤立 partial 被拒绝',
+        dirResult.errors.some((e) => e.includes('缺少同目录的主文件')),
+        show(dirResult.errors)
+    )
+
+    dirResult = prReview.validateScriptDirectory(
+        [
+            { rel_path: 'alice/Both/Main.cs', text: multiMain },
+            { rel_path: 'alice/Both/Other.cs', text: multiMain }
+        ],
+        cfg
+    )
+    expect(
+        '同一 partial 多处 ScriptType 被拒绝',
+        dirResult.errors.some((e) => e.includes('只能保留一处')),
+        show(dirResult.errors)
+    )
+
+    dirResult = prReview.validateScriptDirectory(
+        [
+            { rel_path: 'alice/Multi/Main.cs', text: multiMain },
+            { rel_path: 'alice/Multi/P1.cs', text: multiPart },
+            { rel_path: 'alice/Other/Broken.cs', text: 'class X { }' }
+        ],
+        cfg,
+        new Set(['alice/Multi/P1.cs'])
+    )
+    expect(
+        '只报告与改动文件相关的错误',
+        !dirResult.errors.some((e) => e.includes('Broken.cs')) && dirResult.groups.length === 1,
+        show(dirResult.errors)
+    )
+
+    const goodDoc = JSON.stringify([
+        {
+            Name: 'Multi',
+            Guid: GUID,
+            Version: '0.0.0.1',
+            Author: 'A',
+            DownloadUrl: 'https://example.com/a.cs',
+            Parts: ['https://example.com/b.cs']
+        }
+    ])
+    let docResult = prReview.validateJsonDocument(goodDoc, 'x.json', cfg)
+    expect('合法的 Parts 通过', !docResult.errors.length, show(docResult.errors))
+
+    const badDoc = JSON.stringify([
+        {
+            Name: 'Multi',
+            Guid: GUID,
+            Version: '0.0.0.1',
+            Author: 'A',
+            DownloadUrl: 'https://example.com/a.cs',
+            Parts: ['https://example.com/a.cs', 'https://example.com/a.cs']
+        }
+    ])
+    docResult = prReview.validateJsonDocument(badDoc, 'x.json', cfg)
+    expect(
+        'Parts 重复或与主地址相同被拒绝',
+        docResult.errors.filter((e) => e.includes('Parts')).length >= 2,
+        show(docResult.errors)
+    )
+
+    const nullDoc = JSON.stringify([
+        {
+            Name: 'Multi',
+            Guid: GUID,
+            Version: '0.0.0.1',
+            Author: 'A',
+            DownloadUrl: 'https://example.com/a.cs',
+            Parts: null
+        }
+    ])
+    docResult = prReview.validateJsonDocument(nullDoc, 'x.json', cfg)
+    expect(
+        'Parts 为 null 被拒绝',
+        docResult.errors.some((e) => e.includes('Parts')),
+        show(docResult.errors)
+    )
+
     return failures
 }
 
@@ -714,6 +824,94 @@ export function runMergeReposChecks(): string[] {
         quietBuild(workdir, cfg, 'owner/repo', 'main', { rootJsonPath: onlyRoot })
         expect('--no-site 只写根目录 json', fs.existsSync(onlyRoot))
 
+        const multi = makeTempDir('kasl_multi_')
+        try {
+            fs.mkdirSync(path.join(multi, 'alice', 'Multi'), { recursive: true })
+            fs.mkdirSync(path.join(multi, 'alice', 'Orphan'), { recursive: true })
+            fs.mkdirSync(path.join(multi, 'bob', 'Two'), { recursive: true })
+            /** 写测试文件 */
+            const writeMulti = (rel: string, content: string): void => {
+                fs.writeFileSync(path.join(multi, rel), content, 'utf8')
+            }
+
+            writeMulti(
+                'alice/Multi/Main.cs',
+                `namespace MultiNs;\n[ScriptType(guid: "${GUID_A1}", name: "Multi", version: "0.0.0.1", author: "Alice")]\npartial public class Multi { }\n`
+            )
+            writeMulti(
+                'alice/Multi/P1.cs',
+                'namespace MultiNs;\npublic partial class Multi { public void A() { } }\n'
+            )
+            writeMulti(
+                'alice/Multi/P2.cs',
+                'namespace MultiNs;\npublic partial class Multi { public void B() { } }\n'
+            )
+            writeMulti(
+                'alice/Orphan/Part.cs',
+                'namespace MultiNs;\npublic partial class Orphan { }\n'
+            )
+
+            writeMulti(
+                'bob/Two/A.cs',
+                `namespace TwoNs;\n[ScriptType(guid: "${GUID_A4}", name: "TwoA", version: "0.0.0.1", author: "Bob")]\npublic partial class TwoA { }\n`
+            )
+            writeMulti(
+                'bob/Two/A.Part.cs',
+                'namespace TwoNs;\npublic partial class TwoA { public void A() { } }\n'
+            )
+            writeMulti(
+                'bob/Two/B.cs',
+                `namespace TwoNs;\n[ScriptType(guid: "${GUID_B2}", name: "TwoB", version: "0.0.0.1", author: "Bob")]\npublic partial class TwoB { }\n`
+            )
+            writeMulti(
+                'bob/Two/B.Part.cs',
+                'namespace TwoNs;\npublic partial class TwoB { public void B() { } }\n'
+            )
+
+            const multiCollected = mergeRepos.collect(multi, cfg, 'owner/repo', 'main')
+            const multiRels = multiCollected.records.map(([, rel]) => rel)
+            expect(
+                '多文件脚本只生成一条记录',
+                multiRels.filter((rel) => rel === 'alice/Multi/Main.cs').length === 1 &&
+                    multiRels.filter((rel) => rel.startsWith('alice/Multi/')).length === 1,
+                show(multiRels)
+            )
+            const multiParts = multiCollected.records.find(
+                ([, rel]) => rel === 'alice/Multi/Main.cs'
+            )?.[2].Parts
+            expect(
+                '多文件脚本 Parts 正确',
+                multiParts?.length === 2 &&
+                    multiParts.every((url) => url.includes('/alice/Multi/')),
+                show(multiParts)
+            )
+            expect(
+                '孤立 partial 被跳过',
+                multiCollected.skipped.some(
+                    ([rel, errs]) =>
+                        rel === 'alice/Orphan/Part.cs' &&
+                        errs.some((e) => e.includes('缺少同目录的主文件'))
+                ),
+                show(multiCollected.skipped)
+            )
+            expect(
+                '同目录两个独立 partial 组分别成条',
+                multiRels.filter((rel) => rel.startsWith('bob/Two/')).length === 2,
+                show(multiRels)
+            )
+
+            const multiJson = path.join(multi, 'out.json')
+            quietBuild(multi, cfg, 'owner/repo', 'main', { rootJsonPath: multiJson })
+            const multiDoc = readJson<OnlineScriptEntry[]>(multiJson)
+            expect(
+                '清单写出 Parts',
+                multiDoc.find((entry) => entry.Name === 'Multi')?.Parts?.length === 2,
+                show(multiDoc)
+            )
+        } finally {
+            removeDir(multi)
+        }
+
         write('alice/极佐拉加 绘图.cs', cs(GUID_A2, '中文名', 'Alice'))
         collected = mergeRepos.collect(workdir, cfg, 'owner/repo', 'main')
         const cn = collected.records
@@ -808,6 +1006,62 @@ export function runCsharpMetaChecks(): string[] {
             `实际 ${show({ params, errors })}`
         )
     }
+
+    expect(
+        '提取 partial 类型全名',
+        deepEqual(
+            csharpMeta
+                .extractPartialTypes(
+                    'namespace A.B;\npublic partial class X { }\ninternal partial record class Y { }\n'
+                )
+                .names.sort(),
+            ['A.B.X', 'A.B.Y']
+        )
+    )
+    expect(
+        '修饰符顺序不影响 partial 识别',
+        deepEqual(
+            csharpMeta
+                .extractPartialTypes(
+                    'namespace N;\npartial public class A { }\npartial sealed class B { }\n' +
+                        'partial ref struct C { }\npartial readonly record struct D { }\n'
+                )
+                .names.sort(),
+            ['N.A', 'N.B', 'N.C', 'N.D']
+        )
+    )
+    expect(
+        '嵌套类型与 namespace 拼全名',
+        deepEqual(
+            csharpMeta
+                .extractPartialTypes(
+                    'namespace A {\n  namespace B {\n    class Outer {\n      partial class Inner { }\n    }\n  }\n}\n'
+                )
+                .names.sort(),
+            ['A.B.Outer.Inner']
+        )
+    )
+    expect(
+        '注释和字符串里的 partial 不参与',
+        deepEqual(
+            csharpMeta.extractPartialTypes(
+                '// partial class X\nstring s = "partial class Y";\n/* partial class Z */\nnamespace N;\npartial class Real { }\n'
+            ).names,
+            ['N.Real']
+        )
+    )
+    expect(
+        '识别 ScriptType 特性',
+        csharpMeta.hasScriptTypeAttribute(
+            'namespace N;\n[ScriptType(guid: "x")]\npartial class X { }\n'
+        ) && !csharpMeta.hasScriptTypeAttribute('namespace N;\npartial class X { }\n')
+    )
+    expect(
+        'ScriptType 括号写坏时仍算找到',
+        csharpMeta.hasScriptTypeAttribute(
+            'namespace N;\n[ScriptType(guid: "x"]\npartial class X { }\n'
+        )
+    )
 
     return failures
 }

@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { extractScriptType, pyRepr } from './csharp_meta.ts'
 import type { DecodedValue, ScriptTypeParams } from './csharp_meta.ts'
+import { analyzeFile, groupFiles } from './script_group.ts'
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url))
 const REPO_ROOT = path.dirname(path.dirname(SCRIPT_DIR))
@@ -19,6 +20,7 @@ export const ALLOWED_FIELDS = new Set([
     'Author',
     'Repo',
     'DownloadUrl',
+    'Parts',
     'Note',
     'UpdateInfo',
     'UpdateTime',
@@ -127,6 +129,8 @@ export type JsonValue =
 /** 内容响应 */
 export interface GitHubContentInfo {
     type?: string
+    name?: string
+    path?: string
     size?: number
     encoding?: string
     content?: string
@@ -782,6 +786,43 @@ export function validate_entry(
         errors.push(`${label}：DownloadUrl 必须以 http:// 或 https:// 开头`)
     }
 
+    const parts = entry.Parts
+    if (parts === null) {
+        errors.push(`${label}：Parts 不能为 null，没有附加文件时请省略该字段`)
+    } else if (parts !== undefined) {
+        if (!Array.isArray(parts)) {
+            errors.push(`${label}：Parts 必须是字符串数组，实际是${type_name(parts)}`)
+        } else if (!parts.length) {
+            errors.push(`${label}：Parts 不能为空数组，没有附加文件时请省略该字段`)
+        } else {
+            const seen = new Set<string>()
+            parts.forEach((part, pos) => {
+                if (typeof part !== 'string') {
+                    errors.push(`${label}：Parts[${pos}] 必须是字符串，实际是${type_name(part)}`)
+                    return
+                }
+                const value = pyStrip(part)
+                if (!value) {
+                    errors.push(`${label}：Parts[${pos}] 不能为空`)
+                    return
+                }
+                if (!URL_RE.test(value)) {
+                    errors.push(`${label}：Parts[${pos}] 必须以 http:// 或 https:// 开头`)
+                    return
+                }
+                if (typeof download === 'string' && value === pyStrip(download)) {
+                    errors.push(`${label}：Parts[${pos}] 与 DownloadUrl 重复`)
+                    return
+                }
+                if (seen.has(value)) {
+                    errors.push(`${label}：Parts[${pos}] 重复`)
+                    return
+                }
+                seen.add(value)
+            })
+        }
+    }
+
     const update_time = entry.UpdateTime
     if (
         typeof update_time === 'string' &&
@@ -805,6 +846,110 @@ export function validate_entry(
             warnings.push(message)
         }
     }
+}
+
+/** 目录文件 */
+export interface DirectoryFile {
+    rel_path: string
+    text: string
+}
+
+/** 校验分组 */
+export interface DirectoryGroup {
+    main: DirectoryFile
+    parts: DirectoryFile[]
+    meta: ScriptMeta | null
+    errors: string[]
+    warnings: string[]
+}
+
+/** 校验结果 */
+export interface DirectoryValidation {
+    groups: DirectoryGroup[]
+    errors: string[]
+    warnings: string[]
+}
+
+/** 取作者目录 */
+function owner_of_path(rel_path: string, fallback = '', prefer_fallback = false): string {
+    if (prefer_fallback && fallback) return fallback
+    if (!rel_path.includes('/')) return fallback
+    const first = rel_path.split('/')[0]
+    if (!first || first.includes(':')) return fallback
+    return first
+}
+
+/** 校验目录里的 .cs */
+export function validate_script_directory(
+    files: DirectoryFile[],
+    cfg: ReviewConfig,
+    changed_paths: Set<string> | null = null,
+    fallback_owner = '',
+    prefer_fallback_owner = false
+): DirectoryValidation {
+    const groups: DirectoryGroup[] = []
+    const errors: string[] = []
+    const warnings: string[] = []
+    const related = (rel_path: string): boolean =>
+        changed_paths === null || changed_paths.has(rel_path)
+    const grouping = groupFiles(files.map((file) => analyzeFile(file.rel_path, file.text)))
+
+    for (const group of grouping.groups) {
+        const main: DirectoryFile = { rel_path: group.main.rel, text: group.main.text }
+        const parts = group.parts.map((part) => ({ rel_path: part.rel, text: part.text }))
+        const [meta, file_errors, file_warnings] = validate_script_file(
+            main.text,
+            main.rel_path,
+            owner_of_path(main.rel_path, fallback_owner, prefer_fallback_owner),
+            cfg
+        )
+
+        groups.push({ main, parts, meta, errors: file_errors, warnings: file_warnings })
+        if (related(main.rel_path) || parts.some((part) => related(part.rel_path))) {
+            errors.push(...file_errors)
+            warnings.push(...file_warnings)
+        }
+    }
+
+    for (const file of grouping.orphans)
+        if (related(file.rel))
+            errors.push(`${file.rel}：partial 文件缺少同目录的主文件（主文件必须带 [ScriptType]）`)
+
+    for (const file of grouping.conflicts)
+        if (related(file.rel))
+            errors.push(
+                `${file.rel}：同一 partial 类型的多个文件都声明了 [ScriptType]，只能保留一处`
+            )
+
+    for (const file of grouping.none) {
+        if (!related(file.rel)) continue
+        const [, file_errors] = validate_script_file(
+            file.text,
+            file.rel,
+            owner_of_path(file.rel, fallback_owner, prefer_fallback_owner),
+            cfg
+        )
+        errors.push(...(file_errors.length ? file_errors : [`${file.rel}：无法解析出脚本信息`]))
+    }
+
+    return { groups, errors, warnings }
+}
+
+/** 校验目录别名 */
+export function validateScriptDirectory(
+    files: DirectoryFile[],
+    cfg: ReviewConfig,
+    changed_paths: Set<string> | null = null,
+    fallback_owner = '',
+    prefer_fallback_owner = false
+): DirectoryValidation {
+    return validate_script_directory(
+        files,
+        cfg,
+        changed_paths,
+        fallback_owner,
+        prefer_fallback_owner
+    )
 }
 
 /** 构造请求头 */
@@ -955,6 +1100,96 @@ export async function fetch_file_bytes(
     }
     // 大文件走 raw
     return [await api_raw(`/repos/${repo}/contents/${quoted}?ref=${ref_q}`), null]
+}
+
+/** 仓库树条目 */
+export interface RepoTreeEntry {
+    path?: string
+    type?: string
+}
+
+/** 读取仓库树 */
+export async function fetch_repo_tree(
+    repo: string,
+    ref: string
+): Promise<{ entries: RepoTreeEntry[]; truncated: boolean }> {
+    const info = await api_json<{ tree?: RepoTreeEntry[]; truncated?: boolean }>(
+        `/repos/${repo}/git/trees/${pyQuote(ref, '')}?recursive=1`
+    )
+    if (!info || typeof info !== 'object') return { entries: [], truncated: false }
+    return {
+        entries: Array.isArray(info.tree) ? info.tree : [],
+        truncated: info.truncated === true
+    }
+}
+
+/** 筛选目录下的 .cs */
+function directory_cs_paths(dir: string, tree: RepoTreeEntry[] | null): string[] | null {
+    if (!tree) return null
+    const prefix = `${dir}/`
+    return tree
+        .filter((entry) => entry.type === 'blob')
+        .map((entry) => String(entry.path ?? ''))
+        .filter(
+            (rel) =>
+                rel.startsWith(prefix) &&
+                !rel.slice(prefix.length).includes('/') &&
+                rel.toLowerCase().endsWith('.cs')
+        )
+        .sort()
+}
+
+/** 读取目录列表 */
+async function contents_cs_paths(repo: string, dir: string, ref: string): Promise<string[]> {
+    const quoted = pyQuote(dir, '/')
+    const ref_q = pyQuote(ref, '')
+    let info: unknown
+    try {
+        info = await api_json<unknown>(`/repos/${repo}/contents/${quoted}?ref=${ref_q}`)
+    } catch (exc) {
+        if (exc instanceof HttpError && exc.code === 404) return []
+        throw exc
+    }
+    if (!Array.isArray(info)) return []
+    return info
+        .map((item) => item as GitHubContentInfo)
+        .filter(
+            (entry) =>
+                entry?.type === 'file' &&
+                String(entry.name ?? '')
+                    .toLowerCase()
+                    .endsWith('.cs')
+        )
+        .map((entry) => String(entry.path ?? ''))
+        .filter(Boolean)
+        .sort()
+}
+
+/** 读取目录文件 */
+export async function fetch_directory_files(
+    repo: string,
+    dir: string,
+    ref: string,
+    warnings: string[] = [],
+    tree: RepoTreeEntry[] | null = null
+): Promise<DirectoryFile[]> {
+    const paths = directory_cs_paths(dir, tree) ?? (await contents_cs_paths(repo, dir, ref))
+    const out: DirectoryFile[] = []
+
+    for (const rel_path of paths) {
+        const [bytes, error] = await fetch_file_bytes(repo, rel_path, ref)
+        if (error || !bytes) {
+            warnings.push(`${rel_path}：读取失败，已跳过（${error ?? '未知错误'}）`)
+            continue
+        }
+        try {
+            out.push({ rel_path, text: utf8DecodeStrict(bytes) })
+        } catch (exc) {
+            warnings.push(`${rel_path}：不是合法的 UTF-8，已跳过（${exc}）`)
+        }
+    }
+
+    return out
 }
 
 /** 读取 guid 映射 */
@@ -1545,9 +1780,26 @@ async function review_pull_request(
             return { files, errors, warnings, rows, foreign, known_folders, api_error: null }
         }
 
+        // 查重准备
+        const own_paths = new Set(
+            files
+                .flatMap((item) => [item.filename, item.previous_filename])
+                .filter((value): value is string => typeof value === 'string' && value.length > 0)
+        )
+
+        // 按目录收集 PR 文件
+        const pr_files = new Map<string, string>()
+        const removed_paths = new Set<string>()
         for (const item of files) {
             const filePath = item.filename ?? ''
-            if (item.status === 'removed') continue
+            if (!filePath) continue
+            const previous =
+                typeof item.previous_filename === 'string' ? item.previous_filename : ''
+            if (previous && previous !== filePath) removed_paths.add(previous)
+            if (item.status === 'removed') {
+                removed_paths.add(filePath)
+                continue
+            }
             let data
             let fetch_error
             try {
@@ -1561,34 +1813,79 @@ async function review_pull_request(
                 errors.push(`${filePath}：${fetch_error}`)
                 continue
             }
-            let text
             try {
-                text = utf8DecodeStrict(data as Buffer)
+                pr_files.set(filePath, utf8DecodeStrict(data as Buffer))
             } catch (exc) {
                 errors.push(`${filePath}：不是合法的 UTF-8 编码（${exc}）`)
-                continue
-            }
-
-            const folder_owner = filePath.includes('/') ? filePath.split('/')[0] : author
-            const [meta, file_errors, file_warnings] = validate_script_file(
-                text,
-                filePath,
-                folder_owner,
-                cfg
-            )
-            errors.push(...file_errors)
-            warnings.push(...file_warnings)
-            if (meta) {
-                script_guids.push([filePath, meta.guid])
             }
         }
 
-        // 查重准备
-        const own_paths = new Set()
-        for (const item of files) {
-            for (const key of ['filename', 'previous_filename']) {
-                if (item[key]) own_paths.add(item[key])
+        const directories = new Set(
+            [...pr_files.keys(), ...removed_paths].map((filePath) => path.posix.dirname(filePath))
+        )
+
+        const base_directories = new Map<string, DirectoryFile[]>()
+        let base_tree: RepoTreeEntry[] | null = null
+        if (base_ref) {
+            try {
+                const tree = await fetch_repo_tree(repo, base_ref)
+                if (!tree.truncated) base_tree = tree.entries
+            } catch (exc) {
+                warnings.push(`读取目标分支文件树失败，回退到逐目录读取：${exc}`)
             }
+        }
+
+        for (const directory of directories) {
+            // 根目录按单文件处理
+            if (!directory || directory === '.' || directory === '/') {
+                for (const [filePath, text] of pr_files) {
+                    if (path.posix.dirname(filePath) !== directory) continue
+                    const folder_owner = filePath.includes('/') ? filePath.split('/')[0] : author
+                    const [meta, file_errors, file_warnings] = validate_script_file(
+                        text,
+                        filePath,
+                        folder_owner,
+                        cfg
+                    )
+                    errors.push(...file_errors)
+                    warnings.push(...file_warnings)
+                    if (meta) script_guids.push([filePath, meta.guid])
+                }
+                continue
+            }
+
+            const merged = new Map<string, DirectoryFile>()
+            if (base_ref) {
+                let base_files = base_directories.get(directory)
+                if (!base_files) {
+                    try {
+                        base_files = await fetch_directory_files(
+                            repo,
+                            directory,
+                            base_ref,
+                            warnings,
+                            base_tree
+                        )
+                    } catch (exc) {
+                        errors.push(`${directory}：读取目标分支目录失败 —— ${exc}`)
+                        base_files = []
+                    }
+                    base_directories.set(directory, base_files)
+                }
+                for (const file of base_files) merged.set(file.rel_path, file)
+            }
+            for (const [filePath, text] of pr_files)
+                if (path.posix.dirname(filePath) === directory)
+                    merged.set(filePath, { rel_path: filePath, text })
+            for (const filePath of removed_paths)
+                if (path.posix.dirname(filePath) === directory) merged.delete(filePath)
+
+            const validation = validate_script_directory([...merged.values()], cfg, own_paths)
+            errors.push(...validation.errors)
+            warnings.push(...validation.warnings)
+            for (const group of validation.groups)
+                if (group.meta && own_paths.has(group.main.rel_path))
+                    script_guids.push([group.main.rel_path, group.meta.guid])
         }
 
         let guid_map = null
@@ -2007,29 +2304,63 @@ export function cmd_check_cs(
             exit_code = code
             continue
         }
-        const [meta, errors, warnings] = validate_script_file(
-            text,
-            filePath,
-            owner || infer_owner(filePath),
-            cfg
-        )
-        for (const item of warnings) {
-            println(`⚠️  ${item}`)
-        }
-        for (const item of errors) {
-            println(`❌ ${item}`)
-        }
-        if (errors.length) {
+
+        const absolute = path.resolve(filePath)
+        const directory = path.dirname(absolute)
+        const target = to_rel_path(absolute)
+        const files: DirectoryFile[] = []
+        try {
+            for (const name of fs.readdirSync(directory).sort()) {
+                if (!name.toLowerCase().endsWith('.cs')) continue
+                const full = path.join(directory, name)
+                const [content] = read_utf8(full)
+                if (content !== null) files.push({ rel_path: to_rel_path(full), text: content })
+            }
+        } catch (exc) {
+            println(`❌ ${filePath}：读取目录失败 —— ${exc}`)
             exit_code = 1
-        } else {
-            println(
-                `✅ ${filePath} 通过：Name=${pyReprAny(meta!.name)} Guid=${pyReprAny(meta!.guid)} ` +
-                    `Version=${pyReprAny(meta!.version)} Author=${pyReprAny(meta!.author)} ` +
-                    `TerritoryIds=${pyReprAny(meta!.territorys)}`
-            )
+            continue
         }
+        if (!files.some((item) => item.rel_path === target)) files.push({ rel_path: target, text })
+
+        const validation = validate_script_directory(
+            files,
+            cfg,
+            new Set([target]),
+            owner || infer_owner(filePath),
+            Boolean(owner)
+        )
+        for (const item of validation.warnings) println(`⚠️  ${item}`)
+        for (const item of validation.errors) println(`❌ ${item}`)
+
+        const group = validation.groups.find(
+            (item) =>
+                item.main.rel_path === target || item.parts.some((part) => part.rel_path === target)
+        )
+        if (validation.errors.length || !group?.meta) {
+            exit_code = 1
+            continue
+        }
+
+        println(
+            `✅ ${filePath} 通过：Name=${pyReprAny(group.meta.name)} Guid=${pyReprAny(group.meta.guid)} ` +
+                `Version=${pyReprAny(group.meta.version)} Author=${pyReprAny(group.meta.author)} ` +
+                `TerritoryIds=${pyReprAny(group.meta.territorys)}` +
+                (group.parts.length ? ` Parts=${group.parts.length}` : '')
+        )
     }
     return exit_code
+}
+
+/** 转相对路径 */
+function to_rel_path(filePath: string): string {
+    try {
+        const rel = relativePortable(path.resolve(filePath), REPO_ROOT)
+        if (rel && !rel.startsWith('..')) return rel
+    } catch {
+        // 跨盘符回退
+    }
+    return path.resolve(filePath).split(path.sep).join('/')
 }
 
 /** 校验路径命令 */

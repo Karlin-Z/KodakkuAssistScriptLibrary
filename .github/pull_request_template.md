@@ -1,7 +1,8 @@
 <!--
 提交前请确认：
 1. 只新增 / 修改 / 删除了 .cs 文件；
-2. 每个 .cs 里有且只有一处 [ScriptType(...)]，且 guid 唯一；
+2. 每个脚本的主文件里有且只有一处 [ScriptType(...)]，且 guid 唯一；
+   多文件脚本的 part 文件与主文件同目录、声明同名 partial，且不要写 [ScriptType]；
 3. 已本地运行过：node .github/scripts/pr_review.ts --owner <你的用户名> --check-cs <文件路径>.cs
 4. 如果是修改别人的文件夹，请在「改动说明」里写明原因，并等待文件夹所有者回复批准命令（默认 /approve）确认。
 
@@ -15,5 +16,5 @@
 ## 自检
 
 - [ ] 只改动了 .cs 文件
-- [ ] 每个 .cs 里只有一处 `[ScriptType(...)]`
+- [ ] 每个脚本的主文件里只有一处 `[ScriptType(...)]`；多文件脚本的 part 与主文件同目录、同名 `partial`，且没有写 `[ScriptType]`
 - [ ] 如果改的是别人的文件夹，已写明原因，并等待文件夹所有者回复批准命令（默认 `/approve`）确认

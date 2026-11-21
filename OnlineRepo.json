@@ -608,6 +608,66 @@
     ]
   },
   {
+    "Name": "力之塔",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4805",
+    "Version": "0.0.41",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94.cs",
+    "Note": "本脚本负责战斗绘图、指路、TTS及宝箱连线。\r\n点名播报、统计、聊天查询和药师标记请另行安装独立脚本「力之塔（警察）」。\r\n藏宝图：1.5道中给箱子连线\r\n\r\n请选择自己小队的分组，指路可选ABC123/152463/柠檬松饼攻略\r\n老一:\r\nAOE绘制：旋转，压溃\r\n指路：陨石点名，第一次踩塔，第二次踩塔\r\n老二：\r\nAOE绘制：死刑，扇形，冰火爆炸\r\n指路：雪球，火球（按职能指路）\r\n老三：\r\nAOE绘制：龙态行动，冰圈，俯冲\r\n指路：龙态行动预站位，踩塔，小怪\r\n尾王：\r\nAOE绘制：致命斧/枪，暗杀短剑\r\n指路：符文之斧，圣枪",
+    "UpdateInfo": "分离警察功能；修复柠檬松饼凝冰冲击分组；使用可取消异步延时并增加生命周期校验；统一绘图命名、清理范围与TTS接口。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "力之塔排雷（塔内）",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4999",
+    "Version": "0.1.1",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94%E6%8E%92%E9%9B%B7%EF%BC%88%E5%A1%94%E5%86%85%EF%BC%89.cs",
+    "Note": "塔内在聊天栏输入[/e 新月排雷]即可开始排雷。再次输入可关闭显示。显示持续1800s，如果显示消失，则请重新输入。\n 重大更新：\n- 新增地图切换时自动显示/隐藏地雷标记的功能。\n- 数据按地图ID重构，确保只显示当前地图的地雷。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "力之塔（警察）",
+    "Guid": "9F8E7D6C-5B4A-3C2D-1E0F-9A8B7C6D5E4F",
+    "Version": "0.0.3",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94%EF%BC%88%E8%AD%A6%E5%AF%9F%EF%BC%89.cs",
+    "Note": "力之塔副本的小警察功能，提供关键机制点名播报和检查功能。同时可主动检查扔钱/复活/食物/蓝药等。\r\n\r\n------------以下为默语频道的主动查询功能示意，可配置响应来自小队的检查指令并在小队频道输出------------\r\n检查蓝药：输入【/e 蓝药检查】会输出药师蓝药使用情况，输入【/e 蓝药清理】会清理所有数据\r\n检查复活：输入【/e 复活检查 <数字>...】，数字仅限0~3，支持空格分隔、去重排序，比如【/e 复活检查 1 2】。不指定次数则输出复活次数在0~3次的所有玩家\r\n检查食物：输入【/e 食物检查】会输出所有塔内未进食/食物剩余时间小于等于指定阈值的玩家，负数阈值按0分钟处理\r\n检查扔钱：输入【/e 扔钱检查】会输出所有使用扔钱的玩家和扔钱次数，输入【/e 扔钱清理】会清空扔钱统计数据\r\n标记药师：输入【/e 标记药师】会先清空公共头顶标记，再以攻击1~8标记至多8名药师；标记对其他玩家可见",
+    "UpdateInfo": "检查输出改用可取消异步快照排程，重置、卸载或新同类命令使旧回调失效；校验复活参数及食物阈值；修正陨石和斧猎物状态ID、雪球连线ID，恢复南北分摊图标事件；修正尾王三平台坐标和状态去重生命周期，圣枪排序保留至41557轮次重置；公共药师标记上限8人。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "复活位置",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4809",
+    "Version": "0.0.2",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%A4%8D%E6%B4%BB%E4%BD%8D%E7%BD%AE.cs",
+    "Note": "查看自己将会复活在哪里",
+    "UpdateTime": "2026-11-21T12:40:44Z"
+  },
+  {
+    "Name": "新月岛CE",
+    "Guid": "15725518-8F8E-413A-BEA8-E19CC861CF93",
+    "Version": "0.2.2",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E6%96%B0%E6%9C%88%E5%B2%9BCE.cs",
+    "Note": "新月岛CE绘制已完成",
+    "UpdateInfo": "统一绘图命名与清理范围；修复火冰陷阱、风石光、加鲁拉冲锋及怒潮断头台的并发状态和冲锋失败恢复；陷阱使用可取消的异步延迟重绘并在卸载时释放；加强事件数值解析。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
     "Name": "金碟-小雏鸟的营救者",
     "Guid": "4359482a-b7a8-4eb1-9a42-ffa3c79d6b7b",
     "Version": "0.0.0.3",

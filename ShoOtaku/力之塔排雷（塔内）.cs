@@ -263,7 +263,7 @@ namespace KodakkuAssistXSZYYS
                 _currentMapId = 0;
             }
 
-            accessory.Method.RemoveDraw(".*");
+            accessory.Method.RemoveDraw("EO_.*");
             accessory.Log.Debug("新月岛排雷脚本已初始化。");
         }
         [ScriptMethod(

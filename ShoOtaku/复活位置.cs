@@ -40,9 +40,9 @@ namespace KodakkuAssistXSZYYS
                 dp.DestoryAt = 60000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                accessory.Log.Debug("未找到复活");
+                accessory.Log.Error($"绘制复活位置失败：{ex}");
             }
         }
         [ScriptMethod(

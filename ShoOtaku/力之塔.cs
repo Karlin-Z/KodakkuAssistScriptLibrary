@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 using KodakkuAssist.Data;
 using KodakkuAssist.Extensions;
@@ -10,7 +11,6 @@ using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.Draw.Manager;
 using KodakkuAssist.Module.GameEvent;
 using KodakkuAssist.Module.GameEvent.Struct;
-using KodakkuAssist.Module.GameOperate;
 using KodakkuAssist.Script;
 
 namespace KodakkuAssistXSZYYS
@@ -41,7 +41,7 @@ namespace KodakkuAssistXSZYYS
         Pos5,
         Pos6
     }
-    // 圣枪专用：分组覆盖（None=不变；左上=A；右上=C；下=B）
+    // 圣枪专用：分组覆盖（None=不变；左上=A；右上=B；下=C）
     public enum LanceGuideOverride
     {
         None,
@@ -54,12 +54,13 @@ namespace KodakkuAssistXSZYYS
     name: "力之塔",
     guid: "874D3ECF-BD6B-448F-BB42-AE7F082E4805",
     territorys: [1252],
-    version: "0.0.40",
+    version: "0.0.41",
     author: "XSZYYS",
-    note: "更新内容\r\n直接根据职能而非小队位置指向老二火球站位\r\n标记药师：输入【/e 标记药师】即可标记周围所有药师玩家\r\n藏宝图：1.5道中给箱子连线\r\n\r\n------------以下功能默认仅支持默语，可配置响应来自小队的检查指令并在小队频道输出------------\r\n检查蓝药：输入【/e 蓝药检查】会输出药师蓝药使用情况，输入【/e 蓝药清理】会清理所有数据\r\n检查复活：输入【/e 复活检查 <数字>】，比如【/e 复活检查 1】会输出周围所有剩余1次复活的玩家\r\n检查扔钱：输入【/e 扔钱检查】会输出所有使用扔钱的玩家和扔钱次数，输入【/e 扔钱清理】会清理所有数据\r\n------------------------------------------------------------\r\n请选择自己小队的分组，指路可选ABC123/152463/柠檬松饼攻略\r\n老一:\r\nAOE绘制：旋转，压溃\r\n指路：陨石点名，第一次踩塔，第二次踩塔\r\n老二：\r\nAOE绘制：死刑，扇形，冰火爆炸\r\n指路：雪球，火球\r\n老三：\r\nAOE绘制：龙态行动，冰圈，俯冲\r\n指路：龙态行动预站位，踩塔，小怪\r\n尾王：\r\nAOE绘制：致命斧/枪，暗杀短剑\r\n指路：符文之斧，圣枪"
+    updateInfo: "分离警察功能；修复柠檬松饼凝冰冲击分组；使用可取消异步延时并增加生命周期校验；统一绘图命名、清理范围与TTS接口。",
+    note: "本脚本负责战斗绘图、指路、TTS及宝箱连线。\r\n点名播报、统计、聊天查询和药师标记请另行安装独立脚本「力之塔（警察）」。\r\n藏宝图：1.5道中给箱子连线\r\n\r\n请选择自己小队的分组，指路可选ABC123/152463/柠檬松饼攻略\r\n老一:\r\nAOE绘制：旋转，压溃\r\n指路：陨石点名，第一次踩塔，第二次踩塔\r\n老二：\r\nAOE绘制：死刑，扇形，冰火爆炸\r\n指路：雪球，火球（按职能指路）\r\n老三：\r\nAOE绘制：龙态行动，冰圈，俯冲\r\n指路：龙态行动预站位，踩塔，小怪\r\n尾王：\r\nAOE绘制：致命斧/枪，暗杀短剑\r\n指路：符文之斧，圣枪"
     )]
 
-    public class 力之塔
+    public class 力之塔 : IDisposable
     {
         #region User_Settings_用户设置
         [UserSetting("-----全局设置----- (此设置无实际意义)")]
@@ -82,12 +83,6 @@ namespace KodakkuAssistXSZYYS
         public bool LongPointName { get; set; } = false;
         [UserSetting("圣枪分组覆盖（None=不变）")]
         public LanceGuideOverride HolyLanceGroupOverride { get; set; } = LanceGuideOverride.None;
-        [UserSetting("小警察（开启后默语频道输出关键机制被点名玩家名字）")]
-        public bool PoliceMode { get; set; } = false;
-        [UserSetting("接收小队内的扔钱/复活/蓝药检查请求")]
-        public bool ReceivePartyCheckRequest { get; set; } = false;
-        [UserSetting("蓝药检查范围（仅小队）")]
-        public bool Partycheck { get; set; } = false;
         [UserSetting("-----开发者设置----- (此设置无实际意义)")]
         public bool _____Developer_Settings_____ { get; set; } = true;
 
@@ -96,6 +91,12 @@ namespace KodakkuAssistXSZYYS
 
         #endregion
 
+        private const string DRAW_PREFIX = "ForkedTower_";
+        private readonly object _lifecycleLock = new();
+        // 初始化与延时回调共用此锁，使代次检查和绘图相对重置保持原子性。
+        private int _generation;
+        private CancellationTokenSource _combatCts = new();
+        private bool _disposed;
         private int _turnLeftRightCount = 0;
         private bool _hasCometeorStatus = false;
         private ulong _cometeorTargetId = 0;
@@ -204,13 +205,6 @@ namespace KodakkuAssistXSZYYS
             new(673.07f, -476.00f, -658.11f),
             new(726.77f, -476.00f, -658.39f)
         };
-        // 致命斧机制的三个安全点坐标
-        private static readonly List<Vector3> CriticalAxeSafePositions = new()
-        {
-            new(723.11f, -476.00f, -687.15f),
-            new(677.93f, -476.00f, -686.84f),
-            new(699.77f, -476.00f, -648.27f)
-        };
         // 致命枪机制的三个安全点坐标
         private static readonly List<Vector3> CriticalLanceSafePositions = new()
         {
@@ -232,76 +226,93 @@ namespace KodakkuAssistXSZYYS
             Lance
         }
         private HolyWeaponType _holyWeaponType = HolyWeaponType.None;
-        private readonly HashSet<ulong> _checkedPreyPlayers = new();
-        private readonly object _preyCheckLock = new();
-        private readonly HashSet<ulong> _sacredBowPreyRecordedPlayers = new();
-        private readonly object _sacredBowPreyLock = new();
-        private readonly Dictionary<int, List<(ulong PlayerId, float Duration)>> _lanceShareAssignments = new();
-        private readonly object _lanceShareLock = new();
 
-        private static readonly Dictionary<uint, string> _supportJobStatus = new()
+        // 仅在持有生命周期锁时调用；取消上一轮等待，并阻止已释放实例重新调度。
+        private bool ResetCombatLifecycle()
         {
-            { 4242, "辅助自由人" },
-            { 4358, "辅助骑士" },
-            { 4359, "辅助狂战士" },
-            { 4360, "辅助武僧" },
-            { 4361, "辅助猎人" },
-            { 4362, "辅助武士" },
-            { 4363, "辅助吟游诗人" },
-            { 4364, "辅助风水师" },
-            { 4365, "辅助时魔法师" },
-            { 4366, "辅助炮击士" },
-            { 4367, "辅助药剂师" },
-            { 4368, "辅助预言师" },
-            { 4369, "辅助盗贼" }
-        };
-        private readonly Dictionary<string, Dictionary<string, int>> _moneyThrowCounts = new();
-        private readonly object _moneyThrowLock = new();
-        private readonly Dictionary<string, Dictionary<string, int>> _bluePotionCounts = new();
-        private readonly object _bluePotionLock = new();
+            if (_disposed) return false;
+            _generation++;
+            _combatCts.Cancel();
+            _combatCts.Dispose();
+            _combatCts = new CancellationTokenSource();
+            return true;
+        }
+
+        private void ScheduleCombatAction(ScriptAccessory accessory, int delay, Action action)
+        {
+            lock (_lifecycleLock)
+            {
+                if (_disposed) return;
+                int generation = _generation;
+                CancellationToken token = _combatCts.Token;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(delay, token).ConfigureAwait(false);
+                        lock (_lifecycleLock)
+                        {
+                            if (_disposed || token.IsCancellationRequested || generation != _generation) return;
+                            action();
+                        }
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        // 初始化、切换Boss或卸载时主动取消，属于正常的生命周期结束。
+                    }
+                    catch (Exception ex)
+                    {
+                        accessory.Log.Error($"战斗延时任务失败（延时{delay}ms）：{ex}");
+                    }
+                });
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_lifecycleLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _generation++;
+                _combatCts.Cancel();
+                _combatCts.Dispose();
+            }
+        }
 
         public void Init(ScriptAccessory accessory)
         {
-            accessory.Log.Debug("力之塔0.0.36脚本已加载。");
-            accessory.Method.RemoveDraw(".*");
-
-            _turnLeftRightCount = 0;
-            _hasCometeorStatus = false;
-            _cometeorTargetId = 0;
-            _isCasterInUpperHalf = null;
-            _blueCircles.Clear();
-            _redCircles.Clear();
-            _pairsProcessed = 0;
-            _snowballRushCastCount = 0;
-            _letterGroupRushCount = 0;
-            _numberGroupRushCount = 0;
-            _letterGroupNextPos = null;
-            _numberGroupNextPos = null;
-            _tetherSourceId = 0;
-            _fireballPositions.Clear();
-            _puddles.Clear();
-            _holyWeaponType = HolyWeaponType.None;
-            lock (_sacredBowPreyLock)
+            lock (_lifecycleLock)
             {
-                _sacredBowPreyRecordedPlayers.Clear();
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}.*");
+                _turnLeftRightCount = 0;
+                _hasCometeorStatus = false;
+                _cometeorTargetId = 0;
+                _isCasterInUpperHalf = null;
+                lock (_iceFireLock)
+                {
+                    _blueCircles.Clear();
+                    _redCircles.Clear();
+                    _pairsProcessed = 0;
+                }
+                lock (_snowballLock)
+                {
+                    _snowballRushCastCount = 0;
+                    _letterGroupRushCount = 0;
+                    _numberGroupRushCount = 0;
+                    _letterGroupNextPos = null;
+                    _numberGroupNextPos = null;
+                    _tetherSourceId = 0;
+                }
+                lock (_fireballLock)
+                {
+                    _fireballPositions.Clear();
+                }
+                _puddles.Clear();
+                _holyWeaponType = HolyWeaponType.None;
+                accessory.Log.Debug("力之塔战斗脚本已初始化。");
             }
-            lock (_preyCheckLock)
-            {
-                _checkedPreyPlayers.Clear();
-            }
-            lock (_lanceShareLock)
-            {
-                _lanceShareAssignments.Clear();
-            }
-            lock (_moneyThrowLock)
-            {
-                _moneyThrowCounts.Clear();
-            }
-            lock (_bluePotionLock)
-            {
-                _bluePotionCounts.Clear();
-            }
-
         }
         #region 老一
         [ScriptMethod(
@@ -312,12 +323,16 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss1Draw(Event @event, ScriptAccessory accessory)
         {
-            _hasCometeorStatus = false;
-            _cometeorTargetId = 0;
-            _isCasterInUpperHalf = null;
-            _turnLeftRightCount = 0;
-            accessory.Method.RemoveDraw(".*");
-            accessory.Log.Debug("老一初始化完成。");
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                _hasCometeorStatus = false;
+                _cometeorTargetId = 0;
+                _isCasterInUpperHalf = null;
+                _turnLeftRightCount = 0;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                accessory.Log.Debug("老一初始化完成。");
+            }
         }
 
         [ScriptMethod(
@@ -327,11 +342,11 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnLandingDraw(Event @event, ScriptAccessory accessory)
         {
-            var ActionId = @event.ActionId;
+            var actionId = @event.ActionId;
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Landing_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_Landing_Danger_Zone";
             dp.Owner = @event.SourceId;
-            switch (ActionId)
+            switch (actionId)
             {
                 case 41812:
                     dp.Scale = new Vector2(30, 6);
@@ -365,7 +380,7 @@ namespace KodakkuAssistXSZYYS
         {
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("钢铁");
+                accessory.Method.TTS("钢铁");
             }
         }
 
@@ -379,7 +394,7 @@ namespace KodakkuAssistXSZYYS
         {
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("击退");
+                accessory.Method.TTS("击退");
             }
         }
         [ScriptMethod(
@@ -390,7 +405,7 @@ namespace KodakkuAssistXSZYYS
         public void AethericBarrierKnockback(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Aetheric_Barrier_Knockback";
+            dp.Name = DRAW_PREFIX + "Combat_Aetheric_Barrier_Knockback";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(30, 5);
             dp.Color = accessory.Data.DefaultSafeColor;
@@ -436,7 +451,7 @@ namespace KodakkuAssistXSZYYS
                 case StrategySelection.LemonCookie:
                     // 柠檬烧饼分组攻略
                     // 152463组号到柠檬烧饼组号的映射：1->3, 2->1, 3->6, 4->4, 5->2, 6->5
-                    switch (MyLemonCookiePosition) // 使用152463的位置选择器来表示柠檬烧饼的组号
+                    switch (MyLemonCookiePosition) // 此处枚举表示柠檬松饼的组号
                     {
                         case PositionSelection.Pos1: // 柠檬烧饼1组 -> 对应152463的2组位置
                             targetPosition = Pos_A; // 152463的2组对应Pos_A
@@ -463,7 +478,8 @@ namespace KodakkuAssistXSZYYS
 
             var dp = accessory.Data.GetDefaultDrawProperties();
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"Group_Position_Guide_{MyTeam}";
+            dp.Name = DRAW_PREFIX + $"Combat_Group_Position_Guide_{MyTeam}";
+            dp2.Name = DRAW_PREFIX + $"Combat_Group_Position_Circle_{MyTeam}";
             dp.Owner = accessory.Data.Me;
             dp.TargetPosition = targetPosition;
             dp.Scale = new Vector2(1.5f);
@@ -490,7 +506,7 @@ namespace KodakkuAssistXSZYYS
         public void OnRotationDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Rotation_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_Rotation_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(37);
             dp.Radian = 90f * MathF.PI / 180f;
@@ -508,12 +524,12 @@ namespace KodakkuAssistXSZYYS
             _turnLeftRightCount++;
             var dp1 = accessory.Data.GetDefaultDrawProperties();
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp1.Name = "TurnLeftRight1_Danger_Zone";
+            dp1.Name = DRAW_PREFIX + "Combat_TurnLeftRight1_Danger_Zone";
             dp1.Position = @event.SourcePosition;
             dp1.Scale = new Vector2(66, 6);
             dp1.Color = accessory.Data.DefaultDangerColor;
             dp1.DestoryAt = 8800;
-            dp2.Name = "TurnLeftRight2_Danger_Zone";
+            dp2.Name = DRAW_PREFIX + "Combat_TurnLeftRight2_Danger_Zone";
             dp2.Position = @event.SourcePosition;
             dp2.Scale = new Vector2(66, 6);
             dp2.Color = accessory.Data.DefaultDangerColor;
@@ -524,7 +540,7 @@ namespace KodakkuAssistXSZYYS
             if (_turnLeftRightCount == 2 || _turnLeftRightCount == 4)
             {
                 var dpNorth = accessory.Data.GetDefaultDrawProperties();
-                dpNorth.Name = $"TurnLeftRight_North_Danger_Zone_{_turnLeftRightCount}";
+                dpNorth.Name = DRAW_PREFIX + $"Combat_TurnLeftRight_North_Danger_Zone_{_turnLeftRightCount}";
                 dpNorth.Position = Boss1ArenaCenter;
                 dpNorth.Rotation = MathF.PI;
                 dpNorth.Scale = new Vector2(30, 33);
@@ -535,7 +551,7 @@ namespace KodakkuAssistXSZYYS
             else if (_turnLeftRightCount == 6)
             {
                 var dpSouth = accessory.Data.GetDefaultDrawProperties();
-                dpSouth.Name = "TurnLeftRight_South_Danger_Zone";
+                dpSouth.Name = DRAW_PREFIX + "Combat_TurnLeftRight_South_Danger_Zone";
                 dpSouth.Position = Boss1ArenaCenter;
                 dpSouth.Rotation = 0;
                 dpSouth.Scale = new Vector2(30, 33);
@@ -552,17 +568,9 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnSouthStack(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                if (target != null)
-                {
-                    accessory.Method.SendChat($"/e 分摊（南侧）点名: {target.Name}");
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "South_Stack";
+            dp.Name = DRAW_PREFIX + "Combat_South_Stack";
             dp.Position = Boss1ArenaCenter;
             dp.Rotation = MathF.PI;
             dp.Scale = new Vector2(30, 33);
@@ -571,7 +579,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("分摊去南侧");
+                accessory.Method.TTS("分摊去南侧");
             }
         }
 
@@ -582,17 +590,9 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnNorthStack(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                if (target != null)
-                {
-                    accessory.Method.SendChat($"/e 分摊（北侧）点名: {target.Name}");
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "North_Stack";
+            dp.Name = DRAW_PREFIX + "Combat_North_Stack";
             dp.Position = Boss1ArenaCenter;
             dp.Rotation = 0;
             dp.Scale = new Vector2(30, 33);
@@ -601,7 +601,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("分摊去北侧");
+                accessory.Method.TTS("分摊去北侧");
             }
         }
         [ScriptMethod(
@@ -611,19 +611,11 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnCometeorStatusAdd(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                if (target != null)
-                {
-                    accessory.Method.SendChat($"/e 陨石点名: {target.Name}");
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
             _hasCometeorStatus = true;
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("陨石点名");
+                accessory.Method.TTS("陨石点名");
             }
             if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：玩家获得状态。");
             TryDrawCometeorGuide(accessory);
@@ -638,7 +630,7 @@ namespace KodakkuAssistXSZYYS
         {
             if (@event.TargetId != accessory.Data.Me) return;
             _hasCometeorStatus = false;
-            accessory.Method.RemoveDraw("Cometeor_Guide");
+            accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_Cometeor_Guide$");
             if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：玩家状态消失，移除指路。");
         }
 
@@ -660,7 +652,7 @@ namespace KodakkuAssistXSZYYS
                 if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：条件满足，开始绘制指路。");
 
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = "Cometeor_Guide";
+                dp.Name = DRAW_PREFIX + "Combat_Cometeor_Guide";
                 dp.Owner = accessory.Data.Me;
                 dp.TargetObject = _cometeorTargetId;
                 dp.Scale = new Vector2(1.5f);
@@ -738,7 +730,7 @@ namespace KodakkuAssistXSZYYS
             }
 
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Summon_Guide";
+            dp.Name = DRAW_PREFIX + "Combat_Summon_Guide";
             dp.Owner = accessory.Data.Me;
             dp.TargetPosition = targetPosition;
             dp.Scale = new Vector2(1.5f);
@@ -842,7 +834,7 @@ namespace KodakkuAssistXSZYYS
             if (shouldDraw)
             {
                 var dpGuide = accessory.Data.GetDefaultDrawProperties();
-                dpGuide.Name = $"Floating_Tower_Guide_Arrow";
+                dpGuide.Name = DRAW_PREFIX + $"Combat_Floating_Tower_Guide_Arrow";
                 dpGuide.Owner = accessory.Data.Me;
                 dpGuide.TargetPosition = targetPosition;
                 dpGuide.Scale = new Vector2(1.5f);
@@ -852,7 +844,7 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
 
                 var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                dpCircle.Name = $"Floating_Tower_Guide_Circle";
+                dpCircle.Name = DRAW_PREFIX + $"Combat_Floating_Tower_Guide_Circle";
                 dpCircle.Position = targetPosition;
                 dpCircle.Scale = new Vector2(4);
                 dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
@@ -922,7 +914,7 @@ namespace KodakkuAssistXSZYYS
             if (shouldDraw)
             {
                 var dpGuide = accessory.Data.GetDefaultDrawProperties();
-                dpGuide.Name = $"Ground_Tower_Guide_Arrow";
+                dpGuide.Name = DRAW_PREFIX + $"Combat_Ground_Tower_Guide_Arrow";
                 dpGuide.Owner = accessory.Data.Me;
                 dpGuide.TargetPosition = targetPosition;
                 dpGuide.Scale = new Vector2(1.5f);
@@ -932,7 +924,7 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
 
                 var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                dpCircle.Name = $"Ground_Tower_Guide_Circle";
+                dpCircle.Name = DRAW_PREFIX + $"Combat_Ground_Tower_Guide_Circle";
                 dpCircle.Position = targetPosition;
                 dpCircle.Scale = new Vector2(4);
                 dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
@@ -976,7 +968,7 @@ namespace KodakkuAssistXSZYYS
             if (caster == null) return;
 
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Abc_Safe_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_Abc_Safe_Zone";
             dp.Owner = caster.EntityId;
             dp.Scale = new Vector2(4);
             dp.Color = new Vector4(0, 1, 0, 0.6f);
@@ -999,18 +991,31 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss2Draw(Event @event, ScriptAccessory accessory)
         {
-            _blueCircles.Clear();
-            _redCircles.Clear();
-            _pairsProcessed = 0;
-            _snowballRushCastCount = 0;
-            _letterGroupRushCount = 0;
-            _numberGroupRushCount = 0;
-            _letterGroupNextPos = null;
-            _numberGroupNextPos = null;
-            _tetherSourceId = 0;
-            _fireballPositions.Clear();
-            accessory.Method.RemoveDraw(".*");
-            if (Enable_Developer_Mode) accessory.Log.Debug("老二初始化完成。");
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                lock (_iceFireLock)
+                {
+                    _blueCircles.Clear();
+                    _redCircles.Clear();
+                    _pairsProcessed = 0;
+                }
+                lock (_snowballLock)
+                {
+                    _snowballRushCastCount = 0;
+                    _letterGroupRushCount = 0;
+                    _numberGroupRushCount = 0;
+                    _letterGroupNextPos = null;
+                    _numberGroupNextPos = null;
+                    _tetherSourceId = 0;
+                }
+                lock (_fireballLock)
+                {
+                    _fireballPositions.Clear();
+                }
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("老二初始化完成。");
+            }
         }
 
         [ScriptMethod(
@@ -1021,7 +1026,7 @@ namespace KodakkuAssistXSZYYS
         public void OnSliceNDiceDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Slice_N_Dice_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_Slice_N_Dice_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(70);
             dp.Radian = 90f * MathF.PI / 180f;
@@ -1039,7 +1044,7 @@ namespace KodakkuAssistXSZYYS
         public void OnVengeDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Revenge_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_Revenge_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60);
             dp.Radian = 120f * MathF.PI / 180f;
@@ -1094,7 +1099,7 @@ namespace KodakkuAssistXSZYYS
                 int delay = (explosionTime - displayDuration) - triggerTime;
                 if (delay < 0) delay = 0;
                 var dpBlue = accessory.Data.GetDefaultDrawProperties();
-                dpBlue.Name = $"PrimordialChaos_Blue_{_pairsProcessed}";
+                dpBlue.Name = DRAW_PREFIX + $"Combat_PrimordialChaos_Blue_{_pairsProcessed}";
                 dpBlue.Position = bluePos;
                 dpBlue.Scale = new Vector2(22);
                 dpBlue.Color = new Vector4(0.2f, 0.5f, 1f, 2.0f);
@@ -1103,7 +1108,7 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpBlue);
 
                 var dpRed = accessory.Data.GetDefaultDrawProperties();
-                dpRed.Name = $"PrimordialChaos_Red_{_pairsProcessed}";
+                dpRed.Name = DRAW_PREFIX + $"Combat_PrimordialChaos_Red_{_pairsProcessed}";
                 dpRed.Position = redPos;
                 dpRed.Scale = new Vector2(22);
                 dpRed.Color = new Vector4(1f, 0.2f, 0.2f, 2.0f);
@@ -1113,7 +1118,6 @@ namespace KodakkuAssistXSZYYS
 
                 if (Enable_Developer_Mode) accessory.Log.Debug($"绘制第 {_pairsProcessed + 1} 对冰火圈");
 
-                // 从列表中移除已处理的圈，并增加计数器
                 _blueCircles.RemoveAt(0);
                 _redCircles.RemoveAt(0);
                 _pairsProcessed++;
@@ -1172,7 +1176,6 @@ namespace KodakkuAssistXSZYYS
                     }
                     else
                     {
-                        // Fallback in case something goes wrong
                         if (Enable_Developer_Mode) accessory.Log.Error("雪球狂奔: 无法匹配到路径。");
                         return;
                     }
@@ -1249,7 +1252,7 @@ namespace KodakkuAssistXSZYYS
                 var color = isSafe ? accessory.Data.DefaultSafeColor : accessory.Data.DefaultDangerColor;
 
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"SnowballRush_{_snowballRushCastCount}";
+                dp.Name = DRAW_PREFIX + $"Combat_SnowballRush_{_snowballRushCastCount}";
                 dp.Position = sourcePos;
                 dp.TargetPosition = nextPos;
                 dp.Scale = new Vector2(10);
@@ -1269,18 +1272,13 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnGlacialImpactTether(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                if (target != null)
-                {
-                    accessory.Method.SendChat($"/e 雪球连线点名: {target.Name}");
-                }
-            }
             if (@event.TargetId == accessory.Data.Me)
             {
-                _tetherSourceId = @event.SourceId;
-                if (Enable_Developer_Mode) accessory.Log.Debug($"凝冰冲击: 玩家被连线，来源ID: {_tetherSourceId}");
+                lock (_snowballLock)
+                {
+                    _tetherSourceId = @event.SourceId;
+                    if (Enable_Developer_Mode) accessory.Log.Debug($"凝冰冲击: 玩家被连线，来源ID: {_tetherSourceId}");
+                }
             }
         }
         [ScriptMethod(
@@ -1288,11 +1286,23 @@ namespace KodakkuAssistXSZYYS
             eventType: EventTypeEnum.StartCasting,
             eventCondition: ["ActionId:42451"]
         )]
-        public async void GlacialImpact(Event @event, ScriptAccessory accessory)
+        public void GlacialImpact(Event @event, ScriptAccessory accessory)
         {
-            await Task.Delay(1000);
-            if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 开始读条，触发指路绘制。");
-            DrawGlacialImpactGuide(accessory);
+            ScheduleCombatAction(accessory, 1000, () =>
+            {
+                try
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 开始读条，触发指路绘制。");
+                    lock (_snowballLock)
+                    {
+                        DrawGlacialImpactGuide(accessory);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    accessory.Log.Error($"凝冰冲击延时指路失败：{ex}");
+                }
+            });
         }
 
         private void DrawGlacialImpactGuide(ScriptAccessory accessory)
@@ -1329,7 +1339,8 @@ namespace KodakkuAssistXSZYYS
                         finalDropPos = isPosInLetterGroup ? _letterGroupNextPos : _numberGroupNextPos;
                         break;
                     case StrategySelection.LemonCookie:
-                        bool isLemonPosInLetterGroup = MyLemonCookiePosition == PositionSelection.Pos4 || MyLemonCookiePosition == PositionSelection.Pos5 || MyLemonCookiePosition == PositionSelection.Pos6;
+                        // 与雪球狂奔分组一致：柠檬松饼1/2/3组跟随字母组路径。
+                        bool isLemonPosInLetterGroup = MyLemonCookiePosition == PositionSelection.Pos1 || MyLemonCookiePosition == PositionSelection.Pos2 || MyLemonCookiePosition == PositionSelection.Pos3;
                         finalDropPos = isLemonPosInLetterGroup ? _letterGroupNextPos : _numberGroupNextPos;
                         break;
                 }
@@ -1349,7 +1360,7 @@ namespace KodakkuAssistXSZYYS
             if (safePosition.HasValue)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = "GlacialImpact_Guide";
+                dp.Name = DRAW_PREFIX + "Combat_GlacialImpact_Guide";
                 dp.Owner = accessory.Data.Me;
                 dp.TargetPosition = safePosition.Value;
                 dp.Scale = new Vector2(1.5f);
@@ -1368,7 +1379,10 @@ namespace KodakkuAssistXSZYYS
         )]
         public void GlacialImpactEnd(Event @event, ScriptAccessory accessory)
         {
-            _tetherSourceId = 0;
+            lock (_snowballLock)
+            {
+                _tetherSourceId = 0;
+            }
             if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 机制结束，重置连线状态。");
         }
 
@@ -1403,12 +1417,15 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RedrawFireballGuides(Event @event, ScriptAccessory accessory)
         {
-            if (!_fireballPositions.Any())
+            lock (_fireballLock)
             {
-                if (Enable_Developer_Mode) accessory.Log.Error("火球重绘: 找不到第一轮的火球坐标。");
-                return;
+                if (!_fireballPositions.Any())
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Error("火球重绘: 找不到第一轮的火球坐标。");
+                    return;
+                }
+                ProcessFireballs(accessory);
             }
-            ProcessFireballs(accessory);
         }
         private void ProcessFireballs(ScriptAccessory accessory)
         {
@@ -1450,13 +1467,13 @@ namespace KodakkuAssistXSZYYS
                 var safePos = fireballPos + directionToFireball * 6;
                 var dp = accessory.Data.GetDefaultDrawProperties();
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"Fireball_DPS_SafeZone_{uniqueId}";
+                dp.Name = DRAW_PREFIX + $"Combat_Fireball_DPS_SafeZone_{uniqueId}";
                 dp.Position = safePos;
                 dp.Scale = new Vector2(1);
                 dp.Color = new Vector4(0, 1, 0, 0.6f);
                 dp.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp);
-                dp2.Name = "Guide_to_safepos";
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
                 dp2.Scale = new Vector2(1);
                 dp2.Owner = accessory.Data.Me;
                 dp2.Color = new Vector4(0, 1, 0, 0.6f);
@@ -1467,20 +1484,18 @@ namespace KodakkuAssistXSZYYS
             }
             else if (IsHealer(player))
             {
-                var perpendicularDir1 = new Vector3(-directionToFireball.Z, 0, directionToFireball.X);
                 var perpendicularDir2 = new Vector3(directionToFireball.Z, 0, -directionToFireball.X);
-                var safePos1 = fireballPos + perpendicularDir1 * 6;
                 var safePos2 = fireballPos + perpendicularDir2 * 6;
 
                 var dp1 = accessory.Data.GetDefaultDrawProperties();
-                dp1.Name = $"Fireball_Healer_SafeZone1_{uniqueId}";
+                dp1.Name = DRAW_PREFIX + $"Combat_Fireball_Healer_SafeZone1_{uniqueId}";
                 dp1.Position = safePos2;
                 dp1.Scale = new Vector2(1);
                 dp1.Color = new Vector4(0, 1, 0, 0.6f);
                 dp1.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp2.Name = "Guide_to_safepos";
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
                 dp2.Scale = new Vector2(1);
                 dp2.Owner = accessory.Data.Me;
                 dp2.Color = new Vector4(0, 1, 0, 0.6f);
@@ -1496,7 +1511,7 @@ namespace KodakkuAssistXSZYYS
                 var rotation = MathF.Atan2(directionToCenter.X, directionToCenter.Z);
 
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"Fireball_Tank_SafeZone_{uniqueId}";
+                dp.Name = DRAW_PREFIX + $"Combat_Fireball_Tank_SafeZone_{uniqueId}";
                 dp.Position = fireballPos;
                 dp.Rotation = rotation;
                 dp.Scale = new Vector2(5);
@@ -1505,7 +1520,7 @@ namespace KodakkuAssistXSZYYS
                 dp.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Fan, dp);
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp2.Name = "Guide_to_safepos";
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
                 dp2.Scale = new Vector2(1);
                 dp2.Owner = accessory.Data.Me;
                 dp2.Color = new Vector4(0, 1, 0, 0.6f);
@@ -1522,7 +1537,12 @@ namespace KodakkuAssistXSZYYS
         )]
         public void GeothermalRupture(Event @event, ScriptAccessory accessory)
         {
-            if (_fireballPositions.Count == 0)
+            List<Vector3> fireballPositions;
+            lock (_fireballLock)
+            {
+                fireballPositions = _fireballPositions.ToList();
+            }
+            if (fireballPositions.Count == 0)
             {
                 if (Enable_Developer_Mode) accessory.Log.Error("地热破裂: 未能获取到火球位置信息。");
                 return;
@@ -1531,7 +1551,7 @@ namespace KodakkuAssistXSZYYS
             int pathIndex = 0;
 
             // 为每个记录的DPS位置绘制路径
-            foreach (var fireballPos in _fireballPositions)
+            foreach (var fireballPos in fireballPositions)
             {
                 var directionToFireball = Vector3.Normalize(fireballPos - SnowballArenaCenter);
                 var startPos = fireballPos + directionToFireball * 6;
@@ -1541,7 +1561,7 @@ namespace KodakkuAssistXSZYYS
 
                 // 绘制从起点到90度点的路径（黄）
                 var dp1 = accessory.Data.GetDefaultDrawProperties();
-                dp1.Name = $"GeothermalRupture_Path1_{pathIndex}";
+                dp1.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path1_{pathIndex}";
                 dp1.Position = startPos;
                 dp1.TargetPosition = point1;
                 dp1.Scale = new Vector2(1.5f);
@@ -1551,7 +1571,7 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp1);
                 // 绘制从起点到90度点的路径（绿）
                 var dp4 = accessory.Data.GetDefaultDrawProperties();
-                dp4.Name = $"GeothermalRupture_Path1_{pathIndex}";
+                dp4.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path1_{pathIndex}";
                 dp4.Position = startPos;
                 dp4.TargetPosition = point1;
                 dp4.Scale = new Vector2(1.5f);
@@ -1563,7 +1583,7 @@ namespace KodakkuAssistXSZYYS
 
                 // 绘制从90度点到180度点的路径（黄）
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp2.Name = $"GeothermalRupture_Path2_{pathIndex}";
+                dp2.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path2_{pathIndex}";
                 dp2.Position = point1;
                 dp2.TargetPosition = point2;
                 dp2.Scale = new Vector2(1.5f);
@@ -1573,7 +1593,7 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
                 // 绘制从90度点到180度点的路径（绿）
                 var dp3 = accessory.Data.GetDefaultDrawProperties();
-                dp3.Name = $"GeothermalRupture_Path2_{pathIndex}";
+                dp3.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path2_{pathIndex}";
                 dp3.Position = point1;
                 dp3.TargetPosition = point2;
                 dp3.Scale = new Vector2(1.5f);
@@ -1597,10 +1617,13 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss3Draw(Event @event, ScriptAccessory accessory)
         {
-
-            accessory.Method.RemoveDraw(".*");
-            if (Enable_Developer_Mode) accessory.Log.Debug("老三初始化完成。");
-            _puddles.Clear();
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("老三初始化完成。");
+                _puddles.Clear();
+            }
         }
         [ScriptMethod(
             name: "龙态行动",
@@ -1611,14 +1634,14 @@ namespace KodakkuAssistXSZYYS
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "DraconiformMotion_Danger_Zone1";
+            dp.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Danger_Zone1";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60);
             dp.Radian = 90f * MathF.PI / 180f;
             dp.Color = accessory.Data.DefaultDangerColor;
             dp.ScaleMode = ScaleMode.YByTime;
             dp.DestoryAt = 4800;
-            dp2.Name = "DraconiformMotion_Danger_Zone2";
+            dp2.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Danger_Zone2";
             dp2.Owner = @event.SourceId;
             dp2.Color = accessory.Data.DefaultDangerColor;
             dp2.Scale = new Vector2(60);
@@ -1637,7 +1660,7 @@ namespace KodakkuAssistXSZYYS
         public void OnFrigidDiveDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "FrigidDive_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "Combat_FrigidDive_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(20, 60);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1646,7 +1669,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("俯冲");
+                accessory.Method.TTS("俯冲");
             }
         }
         [ScriptMethod(
@@ -1700,7 +1723,7 @@ namespace KodakkuAssistXSZYYS
             {
                 case PuddleType.Circle:
                     var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                    dpCircle.Name = $"Puddle_Circle_{sourceId}";
+                    dpCircle.Name = DRAW_PREFIX + $"Combat_Puddle_Circle_{sourceId}";
                     dpCircle.Owner = sourceId;
                     dpCircle.Scale = new Vector2(20);
                     dpCircle.Color = accessory.Data.DefaultDangerColor;
@@ -1711,7 +1734,7 @@ namespace KodakkuAssistXSZYYS
 
                 case PuddleType.Cross:
                     var dpCross1 = accessory.Data.GetDefaultDrawProperties();
-                    dpCross1.Name = $"Puddle_Cross1_{sourceId}";
+                    dpCross1.Name = DRAW_PREFIX + $"Combat_Puddle_Cross1_{sourceId}";
                     dpCross1.Owner = sourceId;
                     dpCross1.Scale = new Vector2(16, 120);
                     dpCross1.Color = accessory.Data.DefaultDangerColor;
@@ -1720,7 +1743,7 @@ namespace KodakkuAssistXSZYYS
                     accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpCross1);
 
                     var dpCross2 = accessory.Data.GetDefaultDrawProperties();
-                    dpCross2.Name = $"Puddle_Cross2_{sourceId}";
+                    dpCross2.Name = DRAW_PREFIX + $"Combat_Puddle_Cross2_{sourceId}";
                     dpCross2.Owner = sourceId;
                     dpCross2.Scale = new Vector2(16, 120);
                     dpCross2.Rotation = MathF.PI / 2;
@@ -1739,7 +1762,7 @@ namespace KodakkuAssistXSZYYS
         public void OnDraconiformMotionGuide(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "DraconiformMotion_Guide";
+            dp.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Guide";
             dp.Owner = accessory.Data.Me;
             dp.TargetPosition = new Vector3(-336.98f, -840.00f, 165.53f); // Boss背后
             dp.Scale = new Vector2(1.5f);
@@ -1749,7 +1772,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("预站位");
+                accessory.Method.TTS("预站位");
             }
         }
         [ScriptMethod(
@@ -1783,7 +1806,7 @@ namespace KodakkuAssistXSZYYS
                     if (Vector3.DistanceSquared(tower.Position, coord) < 1.0f)
                     {
                         var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                        dpCircle.Name = $"IceTower_Circle_{tower.EntityId}";
+                        dpCircle.Name = DRAW_PREFIX + $"Combat_IceTower_Circle_{tower.EntityId}";
                         dpCircle.Position = tower.Position;
                         dpCircle.Scale = new Vector2(4);
                         dpCircle.Color = new Vector4(0, 1, 0, 1);
@@ -1826,7 +1849,7 @@ namespace KodakkuAssistXSZYYS
                     if (Vector3.DistanceSquared(tower.Position, coord) < 1.0f)
                     {
                         var dpGuide = accessory.Data.GetDefaultDrawProperties();
-                        dpGuide.Name = $"IceTower_Guide_{tower.EntityId}";
+                        dpGuide.Name = DRAW_PREFIX + $"Combat_IceTower_Guide_{tower.EntityId}";
                         dpGuide.Owner = accessory.Data.Me;
                         dpGuide.TargetObject = tower.EntityId;
                         dpGuide.Scale = new Vector2(1.5f);
@@ -1910,7 +1933,7 @@ namespace KodakkuAssistXSZYYS
                         if (groupEntry.Key == targetGroup)
                         {
                             var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                            dpCircle.Name = $"GroupMarker_Circle_{marker.EntityId}";
+                            dpCircle.Name = DRAW_PREFIX + $"Combat_GroupMarker_Circle_{marker.EntityId}";
                             dpCircle.Owner = marker.EntityId;
                             dpCircle.Scale = new Vector2(3);
                             dpCircle.Color = new Vector4(0, 1, 0, 1);
@@ -1918,7 +1941,7 @@ namespace KodakkuAssistXSZYYS
                             accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
 
                             var dpGuide = accessory.Data.GetDefaultDrawProperties();
-                            dpGuide.Name = $"GroupMarker_Guide_{marker.EntityId}";
+                            dpGuide.Name = DRAW_PREFIX + $"Combat_GroupMarker_Guide_{marker.EntityId}";
                             dpGuide.Owner = accessory.Data.Me;
                             dpGuide.TargetObject = marker.EntityId;
                             dpGuide.Scale = new Vector2(1.5f);
@@ -1942,18 +1965,13 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss4Draw(Event @event, ScriptAccessory accessory)
         {
-            accessory.Method.RemoveDraw(".*");
-            if (Enable_Developer_Mode) accessory.Log.Debug("尾王初始化完成。");
-            _holyWeaponType = HolyWeaponType.None;
-            lock (_preyCheckLock)
+            lock (_lifecycleLock)
             {
-                _checkedPreyPlayers.Clear();
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("尾王初始化完成。");
+                _holyWeaponType = HolyWeaponType.None;
             }
-            lock (_lanceShareLock)
-            {
-                _lanceShareAssignments.Clear();
-            }
-            _sacredBowPreyRecordedPlayers.Clear();
         }
 
         [ScriptMethod(
@@ -1963,13 +1981,13 @@ namespace KodakkuAssistXSZYYS
         )]
         public void UnsealAlert(Event @event, ScriptAccessory accessory)
         {
-            var ActionId = @event.ActionId;
-            if (ActionId == 41538)
+            var actionId = @event.ActionId;
+            if (actionId == 41538)
             {
                 if (EnableTextBanner) accessory.Method.TextInfo("枪，远平A", 5000);
                 if (EnableTTS)
                 {
-                    accessory.Method.EdgeTTS("远平A，3下");
+                    accessory.Method.TTS("远平A，3下");
                 }
             }
             else
@@ -1977,7 +1995,7 @@ namespace KodakkuAssistXSZYYS
                 if (EnableTextBanner) accessory.Method.TextInfo("斧，近平A", 5000);
                 if (EnableTTS)
                 {
-                    accessory.Method.EdgeTTS("近平A，3下");
+                    accessory.Method.TTS("近平A，3下");
                 }
             }
         }
@@ -1991,7 +2009,7 @@ namespace KodakkuAssistXSZYYS
             if (EnableTextBanner) accessory.Method.TextInfo("远近死刑", 5000);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS("远近死刑，然后两下平A");
+                accessory.Method.TTS("远近死刑，然后两下平A");
             }
         }
         [ScriptMethod(
@@ -2015,7 +2033,7 @@ namespace KodakkuAssistXSZYYS
                 var delay = 1100 + (long)(i * 3900);
 
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"AssassinsDagger_{i}";
+                dp.Name = DRAW_PREFIX + $"Combat_AssassinsDagger_{i}";
                 dp.Position = caster.Position;
                 dp.Scale = new Vector2(6, distance);
                 dp.Rotation = currentAngle;
@@ -2045,7 +2063,7 @@ namespace KodakkuAssistXSZYYS
             if (isLance)
             {
                 var dpDonut = accessory.Data.GetDefaultDrawProperties();
-                dpDonut.Name = "CriticalLanceblow_Donut";
+                dpDonut.Name = DRAW_PREFIX + "Combat_CriticalLanceblow_Donut";
                 dpDonut.Owner = caster.EntityId;
                 dpDonut.Scale = new Vector2(32);
                 dpDonut.InnerScale = new Vector2(10);
@@ -2053,59 +2071,29 @@ namespace KodakkuAssistXSZYYS
                 dpDonut.Color = accessory.Data.DefaultDangerColor;
                 dpDonut.DestoryAt = mainShapeDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Donut, dpDonut);
-                var player = accessory.Data.MyObject;
-                if (player != null)
-                {
-                    Vector3 closestPos = CriticalLanceSafePositions[0];
-                    float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
-                    for (int i = 1; i < CriticalLanceSafePositions.Count; i++)
-                    {
-                        float distSq = Vector3.DistanceSquared(player.Position, CriticalLanceSafePositions[i]);
-                        if (distSq < minDistanceSq)
-                        {
-                            minDistanceSq = distSq;
-                            closestPos = CriticalLanceSafePositions[i];
-                        }
-                    }
-                }
                 if (EnableTTS)
                 {
-                    accessory.Method.EdgeTTS("月环");
+                    accessory.Method.TTS("月环");
                 }
             }
             else
             {
                 var dpCircle = accessory.Data.GetDefaultDrawProperties();
-                dpCircle.Name = "CriticalAxeblow_Circle";
+                dpCircle.Name = DRAW_PREFIX + "Combat_CriticalAxeblow_Circle";
                 dpCircle.Owner = caster.EntityId;
                 dpCircle.Scale = new Vector2(20);
                 dpCircle.Color = new Vector4(1f, 0f, 0f, 1.5f);
                 dpCircle.DestoryAt = mainShapeDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpCircle);
-                var player = accessory.Data.MyObject;
-                if (player != null)
-                {
-                    Vector3 closestPos = CriticalAxeSafePositions[0];
-                    float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
-                    for (int i = 1; i < CriticalAxeSafePositions.Count; i++)
-                    {
-                        float distSq = Vector3.DistanceSquared(player.Position, CriticalAxeSafePositions[i]);
-                        if (distSq < minDistanceSq)
-                        {
-                            minDistanceSq = distSq;
-                            closestPos = CriticalAxeSafePositions[i];
-                        }
-                    }
-                }
                 if (EnableTTS)
                 {
-                    accessory.Method.EdgeTTS("钢铁");
+                    accessory.Method.TTS("钢铁");
                 }
             }
             for (int i = 0; i < SquarePositions.Count; i++)
             {
                 var dpSquare = accessory.Data.GetDefaultDrawProperties();
-                dpSquare.Name = $"Square_AOE_{i}";
+                dpSquare.Name = DRAW_PREFIX + $"Combat_Square_AOE_{i}";
                 dpSquare.Position = SquarePositions[i];
                 dpSquare.Rotation = SquareAngles[i];
                 dpSquare.Scale = new Vector2(20, 20);
@@ -2121,17 +2109,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void GreatAxePrey(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                if (float.TryParse(@event["Duration"], out var duration1) && Math.Abs(duration1 - 9.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 大圈（9秒）点名: {target.Name}");
-                    }
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
 
             if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 9.0f) < 0.1f)
@@ -2153,7 +2130,7 @@ namespace KodakkuAssistXSZYYS
                 }
 
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = "GreataxePrey_Guide";
+                dp.Name = DRAW_PREFIX + "Combat_GreataxePrey_Guide";
                 dp.Owner = player.EntityId;
                 dp.TargetPosition = closestPos;
                 dp.Scale = new Vector2(1.5f);
@@ -2168,49 +2145,50 @@ namespace KodakkuAssistXSZYYS
             eventType: EventTypeEnum.StatusAdd,
             eventCondition: ["StatusID:4337"]
         )]
-        public async void GreatAxePreyLong(Event @event, ScriptAccessory accessory)
+        public void GreatAxePreyLong(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                CheckPreyPosition(accessory, @event.TargetId);
-                if (float.TryParse(@event["Duration"], out var duration1) && Math.Abs(duration1 - 21.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 大圈（21秒）点名: {target.Name}");
-                    }
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
 
             if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 21.0f) < 0.1f)
             {
-                var player = accessory.Data.MyObject;
-                if (player == null) return;
-                await Task.Delay(15000);
-                Vector3 closestPos = GreataxePreyPositions[0];
-                float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
-
-                for (int i = 1; i < GreataxePreyPositions.Count; i++)
+                ulong targetId = @event.TargetId;
+                ScheduleCombatAction(accessory, 15000, () =>
                 {
-                    float distSq = Vector3.DistanceSquared(player.Position, GreataxePreyPositions[i]);
-                    if (distSq < minDistanceSq)
+                    try
                     {
-                        minDistanceSq = distSq;
-                        closestPos = GreataxePreyPositions[i];
-                    }
-                }
+                        // 延时结束后重新获取对象和位置，避免持有上一轮的游戏对象。
+                        var player = accessory.Data.MyObject;
+                        if (player == null || player.EntityId != targetId || player.IsDead) return;
+                        if (player is not IBattleChara battleChara ||
+                            !battleChara.StatusList.Any(status => status.StatusId == 4337)) return;
+                        Vector3 closestPos = GreataxePreyPositions[0];
+                        float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
 
-                var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = "GreataxePrey_Guide";
-                dp.Owner = player.EntityId;
-                dp.TargetPosition = closestPos;
-                dp.Scale = new Vector2(1.5f);
-                dp.ScaleMode |= ScaleMode.YByDistance;
-                dp.Color = accessory.Data.DefaultSafeColor;
-                dp.DestoryAt = 6000;
-                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+                        for (int i = 1; i < GreataxePreyPositions.Count; i++)
+                        {
+                            float distSq = Vector3.DistanceSquared(player.Position, GreataxePreyPositions[i]);
+                            if (distSq < minDistanceSq)
+                            {
+                                minDistanceSq = distSq;
+                                closestPos = GreataxePreyPositions[i];
+                            }
+                        }
+
+                        var dp = accessory.Data.GetDefaultDrawProperties();
+                        dp.Name = DRAW_PREFIX + "Combat_GreataxePrey_Guide";
+                        dp.Owner = player.EntityId;
+                        dp.TargetPosition = closestPos;
+                        dp.Scale = new Vector2(1.5f);
+                        dp.ScaleMode |= ScaleMode.YByDistance;
+                        dp.Color = accessory.Data.DefaultSafeColor;
+                        dp.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+                    }
+                    catch (Exception ex)
+                    {
+                        accessory.Log.Error($"大斧猎物延时指路失败：{ex}");
+                    }
+                });
             }
         }
         [ScriptMethod(
@@ -2220,28 +2198,9 @@ namespace KodakkuAssistXSZYYS
         )]
         public void LesserAxePrey(Event @event, ScriptAccessory accessory)
         {
-            if (PoliceMode)
-            {
-                CheckPreyPosition(accessory, @event.TargetId);
-                if (float.TryParse(@event["Duration"], out var duration1) && Math.Abs(duration1 - 13.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 小圈（13秒）点名: {target.Name}");
-                    }
-                }
-                else if (Math.Abs(duration1 - 21.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 小圈（21秒）点名: {target.Name}");
-                    }
-                }
-            }
             if (@event.TargetId != accessory.Data.Me) return;
             var player = accessory.Data.MyObject;
+            if (player == null) return;
             if (float.TryParse(@event["Duration"], out var duration))
             {
                 if (Math.Abs(duration - 13.0f) < 0.1f)
@@ -2259,7 +2218,7 @@ namespace KodakkuAssistXSZYYS
                         }
                     }
                     var dp = accessory.Data.GetDefaultDrawProperties();
-                    dp.Name = "LesseraxePrey_Guide";
+                    dp.Name = DRAW_PREFIX + "Combat_LesseraxePrey_Guide";
                     dp.Owner = player.EntityId;
                     dp.TargetPosition = closestPos;
                     dp.Scale = new Vector2(1.5f);
@@ -2274,7 +2233,7 @@ namespace KodakkuAssistXSZYYS
                     if (LongPointName)
                     {
                         var dp1 = accessory.Data.GetDefaultDrawProperties();
-                        dp1.Name = "LittleAxePrey_SafeZone_21s_2";
+                        dp1.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_2";
                         dp1.Owner = player.EntityId;
                         dp1.TargetPosition = SquarePositions[1];
                         dp1.Scale = new Vector2(1.5f);
@@ -2284,7 +2243,7 @@ namespace KodakkuAssistXSZYYS
                         dp1.DestoryAt = 6000;
                         accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp1);
                         var dp3 = accessory.Data.GetDefaultDrawProperties();
-                        dp3.Name = "LittleAxePrey_SafeZone_21s_3";
+                        dp3.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_3";
                         dp3.Owner = player.EntityId;
                         dp3.TargetPosition = SquarePositions[2];
                         dp3.Scale = new Vector2(1.5f);
@@ -2297,7 +2256,7 @@ namespace KodakkuAssistXSZYYS
                     else
                     {
                         var dp1 = accessory.Data.GetDefaultDrawProperties();
-                        dp1.Name = "LittleAxePrey_SafeZone_21s_2";
+                        dp1.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_2";
                         dp1.Position = SquarePositions[1];
                         dp1.Scale = new Vector2(3);
                         dp1.Color = new Vector4(0, 1, 0, 1);
@@ -2306,7 +2265,7 @@ namespace KodakkuAssistXSZYYS
                         accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
 
                         var dp3 = accessory.Data.GetDefaultDrawProperties();
-                        dp3.Name = "LittleAxePrey_SafeZone_21s_3";
+                        dp3.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_3";
                         dp3.Position = SquarePositions[2];
                         dp3.Scale = new Vector2(3);
                         dp3.Color = new Vector4(0, 1, 0, 1);
@@ -2324,10 +2283,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void HolyLanceGuide(Event @event, ScriptAccessory accessory)
         {
-            lock (_sacredBowPreyLock)
-            {
-                _sacredBowPreyRecordedPlayers.Clear(); // 新一轮圣枪机制开始，清空记录
-            }
             var path = new List<DisplacementContainer>();
             // 覆盖逻辑：仅当选择了“左上/右上/下”时，强制使用 A/B/C 的路径块；
             // 选择 None 时，保持原有 SelectedStrategy 的完整分支，不做任何改动。
@@ -2369,7 +2324,6 @@ namespace KodakkuAssistXSZYYS
             }
             else
             {
-                // None：保留原有策略分支（SelectedStrategy 完整生效）
                 // 根据分组确定路径
                 switch (SelectedStrategy)
                 {
@@ -2474,7 +2428,7 @@ namespace KodakkuAssistXSZYYS
                     Color_GoLater = new Vector4(1, 1, 0, 1),
                     DrawMode = DrawModeEnum.Imgui
                 };
-                accessory.MultiDisDraw(path, props);
+                accessory.MultiDisDraw(path, props, DRAW_PREFIX + "Combat_");
                 if (Enable_Developer_Mode) accessory.Log.Debug($"圣枪机制：覆盖={HolyLanceGroupOverride}，策略={SelectedStrategy}。");
             }
         }
@@ -2525,7 +2479,7 @@ namespace KodakkuAssistXSZYYS
             if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS(hintText);
+                accessory.Method.TTS(hintText);
             }
 
             _holyWeaponType = HolyWeaponType.None;
@@ -2554,465 +2508,12 @@ namespace KodakkuAssistXSZYYS
             if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
             if (EnableTTS)
             {
-                accessory.Method.EdgeTTS(hintText);
+                accessory.Method.TTS(hintText);
             }
 
             _holyWeaponType = HolyWeaponType.None;
         }
-        [ScriptMethod(
-            name: "圣枪分摊点名",
-            eventType: EventTypeEnum.StatusAdd,
-            eventCondition: ["StatusID:4338"]
-        )]
-        public void SacredBowPrey_RecordAndBroadcast(Event @event, ScriptAccessory accessory)
-        {
-            var player = accessory.Data.Objects.SearchById(@event.TargetId);
-            if (player == null) return;
-            lock (_sacredBowPreyLock)
-            {
-                if (_sacredBowPreyRecordedPlayers.Contains(player.EntityId)) return;
-                _sacredBowPreyRecordedPlayers.Add(player.EntityId);
-            }
-            if (float.TryParse(@event["Duration"], out var duration))
-            {
-                int platformIndex = -1;
-                lock (_lanceShareLock)
-                {
-                    bool alreadyRecorded = _lanceShareAssignments.Values.Any(list => list.Any(p => p.PlayerId == player.EntityId));
-                    if (!alreadyRecorded)
-                    {
-                        for (int i = 0; i < SquarePositions.Count; i++)
-                        {
-                            if (IsPointInRotatedRect(player.Position, SquarePositions[i], 20, 20, SquareAngles[i]))
-                            {
-                                platformIndex = i;
-                                break;
-                            }
-                        }
-
-                        if (platformIndex != -1)
-                        {
-                            if (!_lanceShareAssignments.ContainsKey(platformIndex))
-                            {
-                                _lanceShareAssignments[platformIndex] = new List<(ulong, float)>();
-                            }
-                            _lanceShareAssignments[platformIndex].Add((player.EntityId, duration));
-                            if (Enable_Developer_Mode)
-                            {
-                                accessory.Log.Debug($"圣枪分摊记录: {player.Name.TextValue} 在平台 {platformIndex + 1}，持续时间 {duration:F2}s");
-                            }
-                        }
-                        else
-                        {
-                            if (Enable_Developer_Mode)
-                            {
-                                 accessory.Log.Debug($"圣枪分摊记录: {player.Name.TextValue} 是战犯，不在任何平台。");
-                            }
-                        }
-                    }
-                }
-
-                if (PoliceMode)
-                {
-                    int reportPlatformIndex = -1;
-                    for (int i = 0; i < SquarePositions.Count; i++)
-                    {
-                        if (IsPointInRotatedRect(player.Position, SquarePositions[i], 21, 21, SquareAngles[i]))
-                        {
-                            reportPlatformIndex = i;
-                            break;
-                        }
-                    }
-
-                    string platformName = reportPlatformIndex switch
-                    {
-                        0 => "下",
-                        1 => "右上",
-                        2 => "左上",
-                        _ => "战犯"
-                    };
-
-                    accessory.Method.SendChat($"/e 圣枪分摊点名: {player.Name.TextValue} - {platformName} ({duration:F1}s)");
-                }
-            }
-        }
-        [ScriptMethod(
-            name: "圣枪分摊 - 擦边检查",
-            eventType: EventTypeEnum.StatusRemove,
-            eventCondition: ["StatusID:4338"]
-        )]
-        public void SacredBowPrey_CheckOnExpire(Event @event, ScriptAccessory accessory)
-        {
-            // 检查buff是否为正常到期
-            if (!float.TryParse(@event["Duration"], out var remainingDuration) || remainingDuration > 0.1f)
-            {
-                return;
-            }
-
-            var player = accessory.Data.Objects.SearchById(@event.TargetId);
-            if (player == null || player.IsDead) return;
-
-            lock (_lanceShareLock)
-            {
-                int initialPlatform = -1;
-                (ulong PlayerId, float Duration) assignment = (0, 0);
-
-                foreach (var entry in _lanceShareAssignments)
-                {
-                    var found = entry.Value.FirstOrDefault(p => p.PlayerId == player.EntityId);
-                    if (found.PlayerId != 0)
-                    {
-                        initialPlatform = entry.Key;
-                        assignment = found;
-                        break;
-                    }
-                }
-
-                if (initialPlatform == -1) return;
-
-                var sortedPlayers = _lanceShareAssignments[initialPlatform].OrderBy(p => p.Duration).ToList();
-                int orderIndex = sortedPlayers.FindIndex(p => p.PlayerId == player.EntityId);
-
-                bool shouldCheck = false;
-                switch (initialPlatform)
-                {
-                    case 0: // 平台1 (下)
-                        if (orderIndex == 0 || orderIndex == 2) shouldCheck = true;
-                        break;
-                    case 1: // 平台2 (右上)
-                        if (orderIndex == 1 || orderIndex == 2) shouldCheck = true;
-                        break;
-                    case 2: // 平台3 (左上)
-                        if (orderIndex == 0 || orderIndex == 1) shouldCheck = true;
-                        break;
-                }
-
-                if (shouldCheck)
-                {
-                    if (!IsCircleFullyContainedInAnyPlatform(player.Position))
-                    {
-                        if (PoliceMode) accessory.Method.SendChat($"/e 分摊擦边: {player.Name.TextValue}");
-                    }
-                }
-            }
-        }
-
-        private void CheckPreyPosition(ScriptAccessory accessory, ulong targetId)
-        {
-            // 如果已经检查过该玩家，则直接返回
-            lock (_preyCheckLock)
-            {
-                if (_checkedPreyPlayers.Contains(targetId)) return;
-                _checkedPreyPlayers.Add(targetId);
-            }
-            if (!PoliceMode) return;
-
-            var player = accessory.Data.Objects.SearchById(targetId);
-            if (player == null) return;
-
-            bool isInAnySquare = false;
-            for (int i = 0; i < SquarePositions.Count; i++)
-            {
-                if (IsPointInRotatedRect(player.Position, SquarePositions[i], 20, 20, SquareAngles[i]))
-                {
-                    isInAnySquare = true;
-                    break;
-                }
-            }
-
-            if (!isInAnySquare)
-            {
-                accessory.Method.SendChat($"/e {player.Name} 站位错误！");
-            }
-        }
-
-        private bool IsPointInRotatedRect(Vector3 point, Vector3 rectCenter, float rectWidth, float rectHeight, float rectAngleRad)
-        {
-            float translatedX = point.X - rectCenter.X;
-            float translatedZ = point.Z - rectCenter.Z;
-
-            float cosAngle = MathF.Cos(-rectAngleRad);
-            float sinAngle = MathF.Sin(-rectAngleRad);
-
-            float rotatedX = translatedX * cosAngle - translatedZ * sinAngle;
-            float rotatedZ = translatedX * sinAngle + translatedZ * cosAngle;
-
-            return (Math.Abs(rotatedX) <= rectWidth / 2) && (Math.Abs(rotatedZ) <= rectHeight / 2);
-        }
-        private bool IsCircleFullyContainedInAnyPlatform(Vector3 circleCenter)
-        {
-            const float circleRadius = 6f;
-            const float platformSize = 20f;
-            // 通过收缩平台来简化问题：如果圆心在一个更小的矩形内，那么整个圆就在原始矩形内
-            float shrunkenSize = platformSize - 2 * circleRadius;
-
-            for (int i = 0; i < SquarePositions.Count; i++)
-            {
-                if (IsPointInRotatedRect(circleCenter, SquarePositions[i], shrunkenSize, shrunkenSize, SquareAngles[i]))
-                {
-                    return true;
-                }
-            }
-            return false;
-        }
         #endregion
-        [ScriptMethod(
-            name: "检查复活",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:regex:^(Echo|Party)$"]
-        )]
-        public async void CheckResurrection(Event @event, ScriptAccessory accessory)
-        {
-            string channel = @event["Type"].ToLower();
-            if (!ReceivePartyCheckRequest && channel == "party") return;
-
-            string message = @event["Message"];
-            if (!message.StartsWith("复活检查")) return;
-            string[] parts = message.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            int? targetCount = null;
-            if (parts.Length > 1 && int.TryParse(parts[1], out int count))
-            {
-                targetCount = count;
-            }
-            var allResurrectionData = new List<Tuple<string, string, string, int>>();
-
-            foreach (var gameObject in accessory.Data.Objects)
-            {
-                if (gameObject is IPlayerCharacter player)
-                {
-                    string playerName = player.Name.TextValue;
-                    string classJob = player.ClassJob.Value.Name.ToString();
-                    string supportJob = "无";
-                    int resurrectionCount = 0;
-                    bool hasResDebuff = false;
-                    foreach (var status in player.StatusList)
-                    {
-                        if (status.StatusId == 4262 || status.StatusId == 4263)
-                        {
-                            resurrectionCount = status.Param;
-                            hasResDebuff = true;
-                        }
-                        if (_supportJobStatus.TryGetValue(status.StatusId, out var jobName))
-                        {
-                            supportJob = jobName;
-                        }
-                    }
-                    if (hasResDebuff)
-                    {
-                        allResurrectionData.Add(new Tuple<string, string, string, int>(playerName, classJob, supportJob, resurrectionCount));
-                    }
-                }
-            }
-            var filteredData = targetCount.HasValue
-                ? allResurrectionData.Where(t => t.Item4 == targetCount.Value).ToList()
-                : allResurrectionData;
-
-            if (filteredData.Count > 0)
-            {
-                var sortedData = filteredData.OrderBy(t => t.Item4).ToList();
-
-                string title = targetCount.HasValue ? $"--- 复活次数为 {targetCount.Value} 的玩家 ---" : "--- 复活次数检查 ---";
-                accessory.Method.SendChat($"/{channel} {title}");
-
-                foreach (var data in sortedData)
-                {
-                    await Task.Delay(10);
-                    accessory.Method.SendChat($"/{channel} {data.Item1} ({data.Item2} | {data.Item3}): {data.Item4}");
-                }
-            }
-            else
-            {
-                await Task.Delay(10);
-                string notFoundMessage = targetCount.HasValue ? $"未找到复活次数为 {targetCount.Value} 的玩家。" : "未找到有限制复活的玩家。";
-                accessory.Method.SendChat($"/{channel} {notFoundMessage}");
-            }
-        }
-        [ScriptMethod(
-            name: "记录扔钱次数",
-            eventType: EventTypeEnum.ActionEffect,
-            eventCondition: ["ActionId:41606"],
-            userControl: false
-        )]
-        public void RecordMoneyThrow(Event @event, ScriptAccessory accessory)
-        {
-            var source = accessory.Data.Objects.SearchById(@event.SourceId);
-            var target = accessory.Data.Objects.SearchById(@event.TargetId);
-
-
-            if (source == null || target == null || !(source is IBattleChara) || !(target is IBattleChara))
-                return;
-
-            string playerName = source.Name.TextValue;
-            string bossName = target.Name.TextValue;
-
-            lock (_moneyThrowLock)
-            {
-                if (!_moneyThrowCounts.ContainsKey(bossName))
-                {
-                    _moneyThrowCounts[bossName] = new Dictionary<string, int>();
-                }
-                if (!_moneyThrowCounts[bossName].ContainsKey(playerName))
-                {
-                    _moneyThrowCounts[bossName][playerName] = 0;
-                }
-                _moneyThrowCounts[bossName][playerName]++;
-            }
-        }
-        [ScriptMethod(
-            name: "检查扔钱",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:regex:^(Echo|Party)$", "Message:扔钱检查"]
-        )]
-        public async void CheckMoneyThrow(Event @event, ScriptAccessory accessory)
-        {
-            string channel = @event["Type"].ToLower();
-            if (!ReceivePartyCheckRequest && channel == "party") return;
-
-            Dictionary<string, List<KeyValuePair<string, int>>> sortedData;
-            lock (_moneyThrowLock)
-            {
-                if (_moneyThrowCounts.Count == 0)
-                {
-                    accessory.Method.SendChat($"/{channel} 未记录到任何扔钱数据。");
-                    return;
-                }
-
-                sortedData = new Dictionary<string, List<KeyValuePair<string, int>>>();
-                foreach (var bossEntry in _moneyThrowCounts)
-                {
-                    sortedData[bossEntry.Key] = bossEntry.Value.OrderBy(kvp => kvp.Value).ToList();
-                }
-            }
-
-            foreach (var bossEntry in sortedData)
-            {
-                accessory.Method.SendChat($"/{channel} --- {bossEntry.Key} 扔钱统计 ---");
-                foreach (var data in bossEntry.Value)
-                {
-                    await Task.Delay(100);
-                    accessory.Method.SendChat($"/{channel} {data.Key}: {data.Value} 次");
-                }
-            }
-        }
-        [ScriptMethod(
-            name: "清理扔钱数据",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:regex:^(Echo|Party)$", "Message:扔钱清理"]
-        )]
-        public void ClearMoneyThrowData(Event @event, ScriptAccessory accessory)
-        {
-            string channel = @event["Type"].ToLower();
-            if (!ReceivePartyCheckRequest && channel == "party") return;
-
-            lock (_moneyThrowLock)
-            {
-                _moneyThrowCounts.Clear();
-            }
-            accessory.Method.SendChat($"/{channel} 扔钱数据已清理。");
-        }
-        [ScriptMethod(
-            name: "记录蓝药次数",
-            eventType: EventTypeEnum.ActionEffect,
-            eventCondition: ["ActionId:41633"],
-            userControl: false
-        )]
-        public void RecordBluePotion(Event @event, ScriptAccessory accessory)
-        {
-            var source = accessory.Data.Objects.SearchById(@event.SourceId);
-            var target = accessory.Data.Objects.SearchById(@event.TargetId);
-
-
-            if (source == null || target == null || !(source is IPlayerCharacter) || !(target is IPlayerCharacter))
-                return;
-
-            string sourcePlayerName = source.Name.TextValue;
-            string targetPlayerName = target.Name.TextValue;
-
-            lock (_bluePotionLock)
-            {
-                // 外层Key是目标玩家，内层Key是来源玩家
-                if (!_bluePotionCounts.ContainsKey(targetPlayerName))
-                {
-                    _bluePotionCounts[targetPlayerName] = new Dictionary<string, int>();
-                }
-                if (!_bluePotionCounts[targetPlayerName].ContainsKey(sourcePlayerName))
-                {
-                    _bluePotionCounts[targetPlayerName][sourcePlayerName] = 0;
-                }
-                _bluePotionCounts[targetPlayerName][sourcePlayerName]++;
-            }
-        }
-        [ScriptMethod(
-            name: "检查蓝药",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:regex:^(Echo|Party)$", "Message:蓝药检查"]
-        )]
-        public async void CheckBluePotion(Event @event, ScriptAccessory accessory)
-        {
-            string channel = @event["Type"].ToLower();
-            if (!ReceivePartyCheckRequest && channel == "party") return;
-
-            Dictionary<string, List<KeyValuePair<string, int>>> sortedData;
-            lock (_bluePotionLock)
-            {
-                if (_bluePotionCounts.Count == 0)
-                {
-                    accessory.Method.SendChat($"/{channel} 未记录到任何蓝药数据。");
-                    return;
-                }
-
-                var partyMemberNames = Partycheck ?
-                    accessory.Data.PartyList.Select(id => accessory.Data.Objects.SearchById(id)?.Name.TextValue).Where(name => name != null).ToHashSet()
-                    : null;
-
-                sortedData = new Dictionary<string, List<KeyValuePair<string, int>>>();
-                foreach (var bossEntry in _bluePotionCounts)
-                {
-                    var filteredPlayers = Partycheck ?
-                        bossEntry.Value.Where(kvp => partyMemberNames.Contains(kvp.Key) && partyMemberNames.Contains(bossEntry.Key)).ToList()
-                        : bossEntry.Value.ToList();
-
-                    if (filteredPlayers.Count > 0)
-                    {
-                        sortedData[bossEntry.Key] = filteredPlayers.OrderBy(kvp => kvp.Value).ToList();
-                    }
-                }
-            }
-
-            if (sortedData.Count == 0)
-            {
-                accessory.Method.SendChat($"/{channel} 当前范围内未记录到符合条件的蓝药数据。");
-                return;
-            }
-
-            foreach (var bossEntry in sortedData)
-            {
-                accessory.Method.SendChat($"/{channel} --- 对 {bossEntry.Key} 的蓝药统计 ---");
-
-                foreach (var data in bossEntry.Value)
-                {
-                    await Task.Delay(100);
-                    accessory.Method.SendChat($"/{channel} {data.Key}: {data.Value} 次");
-                }
-            }
-        }
-        [ScriptMethod(
-            name: "清理蓝药数据",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:regex:^(Echo|Party)$", "Message:蓝药清理"]
-        )]
-        public void ClearBluePotionData(Event @event, ScriptAccessory accessory)
-        {
-            string channel = @event["Type"].ToLower();
-            if (!ReceivePartyCheckRequest && channel == "party") return;
-
-            lock (_bluePotionLock)
-            {
-                _bluePotionCounts.Clear();
-            }
-            accessory.Method.SendChat($"/{channel} 蓝药数据已清理。");
-        }
-
         [ScriptMethod(
             name: "藏宝图",
             eventType: EventTypeEnum.ObjectChanged,
@@ -3022,7 +2523,7 @@ namespace KodakkuAssistXSZYYS
         {
             if (Enable_Developer_Mode) accessory.Log.Debug("找到箱子");
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "Chest";
+            dp.Name = $"{DRAW_PREFIX}Chest_{@event.SourceId:X}";
             dp.Owner = accessory.Data.Me;
             dp.TargetObject = @event.SourceId;
             dp.Color = accessory.Data.DefaultSafeColor;
@@ -3040,51 +2541,7 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RemoveTreasureChest(Event @event, ScriptAccessory accessory)
         {
-            accessory.Method.RemoveDraw("Chest");
-        }
-        [ScriptMethod(
-            name: "标记药师",
-            eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:Echo"]
-        )]
-        public async void MarkChemists(Event @event, ScriptAccessory accessory)
-        {
-            if (@event["Message"] != "标记药师") return;
-
-            if (Enable_Developer_Mode) accessory.Log.Debug("检测到'标记药师'指令...");
-            accessory.Method.MarkClear();
-            await Task.Delay(1000); // 等待标记清除
-
-            var markType = MarkType.Attack1;
-            int chemistsFound = 0;
-
-            foreach (var gameObject in accessory.Data.Objects)
-            {
-                if (gameObject is IPlayerCharacter player)
-                {
-                    bool isChemist = false;
-                    foreach (var status in player.StatusList)
-                    {
-                        if (status.StatusId == 4367) // 辅助药剂师 Status ID
-                        {
-                            isChemist = true;
-                            break;
-                        }
-                    }
-
-                    if (isChemist)
-                    {
-                        accessory.Method.Mark(player.EntityId, markType);
-                        chemistsFound++;
-                        if (markType < MarkType.Attack8)
-                        {
-                            markType++;
-                        }
-                    }
-                }
-            }
-
-            accessory.Method.SendChat($"/e 已标记 {chemistsFound} 名药师。");
+            accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Chest_{@event.SourceId:X}$");
         }
         #region Helper_Functions
 
@@ -3161,7 +2618,7 @@ namespace KodakkuAssistXSZYYS
 
     public static class HelperExtensions
     {
-        internal static void MultiDisDraw(this ScriptAccessory accessory, List<DisplacementContainer> list, MultiDisDrawProp prop)
+        internal static void MultiDisDraw(this ScriptAccessory accessory, List<DisplacementContainer> list, MultiDisDrawProp prop, string drawPrefix)
         {
             long startTimeMillis = prop.BaseDelay;
             string guid = Guid.NewGuid().ToString();
@@ -3169,7 +2626,7 @@ namespace KodakkuAssistXSZYYS
             {
                 int count = 0;
                 DisplacementContainer dis = list[i];
-                string name = $"_MultiDisDraw Part {i} : {guid} / ";
+                string name = $"{drawPrefix}MultiDisDraw Part {i} : {guid} / ";
 
                 // go now 直线引导部分
                 DrawPropertiesEdit dp_goNowLine = accessory.Data.GetDefaultDrawProperties();

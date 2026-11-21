@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
+using System.Threading.Tasks;
 using KodakkuAssist.Data;
 using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.GameEvent;
@@ -15,14 +16,21 @@ namespace KodakkuAssistXSZYYS
         name: "新月岛CE",
         guid: "15725518-8F8E-413A-BEA8-E19CC861CF93",
         territorys: [1252],
-        version: "0.2.1",
+        version: "0.2.2",
         author: "XSZYYS",
-        note: "新月岛CE绘制已完成"
+        note: "新月岛CE绘制已完成",
+        updateInfo: "统一绘图命名与清理范围；修复火冰陷阱、风石光、加鲁拉冲锋及怒潮断头台的并发状态和冲锋失败恢复；陷阱使用可取消的异步延迟重绘并在卸载时释放；加强事件数值解析。"
     )]
-    public class 新月岛CE
+    public class 新月岛CE : IDisposable
     {
+        private const string DRAW_PREFIX = "CrescentIslandCE_";
         private readonly object _surgeLock = new();
         private readonly object _trapLock = new();
+        private readonly object _garulaLock = new();
+        private readonly object _tidalLock = new();
+        private CancellationTokenSource _trapCts = new();
+        private bool _disposed;
+        private long _trapRevision;
         private ulong _bossId;
         private Vector3? _noiseComplaintArenaCenter;
         private bool _noiseComplaintCenterRecorded;
@@ -41,9 +49,6 @@ namespace KodakkuAssistXSZYYS
         private readonly List<FireIceTrapInfo> _fireIceTraps = new();
         private readonly Dictionary<ulong, bool> _playerElements = new();
 
-        /// <summary>
-        /// 夺心魔火冰陷阱的信息载体
-        /// </summary>
         private class FireIceTrapInfo
         {
             public ulong NpcId { get; init; }
@@ -64,19 +69,39 @@ namespace KodakkuAssistXSZYYS
         public void Init(ScriptAccessory accessory)
         {
             accessory.Log.Debug("新月岛CE脚本已加载。");
-            const string DrawPrefix = "CrescentIslandCE_";
-            accessory.Method.RemoveDraw($"{DrawPrefix}.*");
-            _lightningIsCardinal = null;
-            _activeBirds.Clear();
-            _tidalGuillotineAoes.Clear();
-            _noiseComplaintCenterRecorded = false;
-            _noiseComplaintArenaCenter = null;
-            ResetState();
+            lock (_garulaLock)
+            {
+                _noiseComplaintCenterRecorded = false;
+                _noiseComplaintArenaCenter = null;
+                ResetState();
+            }
+            lock (_tidalLock)
+            {
+                _tidalGuillotineAoes.Clear();
+            }
             ResetWindStoneLightSurgeState();
             lock (_trapLock)
             {
+                if (_disposed) return;
+                _trapRevision++;
+                _trapCts.Cancel();
+                _trapCts.Dispose();
+                _trapCts = new CancellationTokenSource();
                 _fireIceTraps.Clear();
                 _playerElements.Clear();
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}.*");
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_trapLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _trapRevision++;
+                _trapCts.Cancel();
+                _trapCts.Dispose();
             }
         }
 
@@ -88,7 +113,7 @@ namespace KodakkuAssistXSZYYS
         public void ChocoBeak(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "BlackRegiment_ChocoBeak_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "BlackRegiment_ChocoBeak_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(4, 70);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -106,7 +131,7 @@ namespace KodakkuAssistXSZYYS
         public void ChocoMaelfeather(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "BlackRegiment_ChocoMaelfeather_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "BlackRegiment_ChocoMaelfeather_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(8);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -123,7 +148,7 @@ namespace KodakkuAssistXSZYYS
         public void ChocoWindstorm(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "BlackRegiment_ChocoWindstorm_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "BlackRegiment_ChocoWindstorm_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(16);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -141,7 +166,7 @@ namespace KodakkuAssistXSZYYS
         public void ChocoCyclone(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "BlackRegiment_ChocoCyclone_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "BlackRegiment_ChocoCyclone_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(30, 30);
             dp.InnerScale = new Vector2(8, 8);
@@ -183,7 +208,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < positions.Count; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"BlackRegiment_ChocoSlaughter_Danger_Zone_{i}";
+                dp.Name = DRAW_PREFIX + $"BlackRegiment_ChocoSlaughter_Danger_Zone_{i}";
                 dp.Position = positions[i];
                 dp.Scale = new Vector2(5);
                 dp.Color = accessory.Data.DefaultDangerColor;
@@ -207,7 +232,7 @@ namespace KodakkuAssistXSZYYS
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
 
-            dp.Name = "FromTimesBygone_MysticHeat_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "FromTimesBygone_MysticHeat_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(40);
             dp.Radian = DegToRad(60);
@@ -227,7 +252,7 @@ namespace KodakkuAssistXSZYYS
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
 
-            dp.Name = "FromTimesBygone_BigBurst_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "FromTimesBygone_BigBurst_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(26);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -246,7 +271,7 @@ namespace KodakkuAssistXSZYYS
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
 
-            dp.Name = "FromTimesBygone_DeathRay_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "FromTimesBygone_DeathRay_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60);
             dp.Radian = DegToRad(90);
@@ -267,7 +292,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < 4; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"FromTimesBygone_Steelstrike_Danger_Zone_{i}";
+                dp.Name = DRAW_PREFIX + $"FromTimesBygone_Steelstrike_Danger_Zone_{i}";
                 dp.Owner = @event.SourceId;
                 dp.Scale = new Vector2(10, 100);
                 dp.Rotation = i * (MathF.PI / 4);
@@ -290,7 +315,7 @@ namespace KodakkuAssistXSZYYS
 
             var dp = accessory.Data.GetDefaultDrawProperties();
 
-            dp.Name = $"FromTimesBygone_ArcaneOrb_Danger_Zone_{pos.X}_{pos.Z}";
+            dp.Name = DRAW_PREFIX + $"FromTimesBygone_ArcaneOrb_Danger_Zone_{pos.X}_{pos.Z}";
             dp.Position = pos;
             dp.Scale = new Vector2(6);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -310,7 +335,7 @@ namespace KodakkuAssistXSZYYS
         {
             accessory.Log.Debug($"指令 (Tether 012F) 触发: 绘制圆形AOE, 目标: {@event.TargetId}");
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"ExtremePrejudice_Circle_{@event.TargetId}";
+            dp.Name = DRAW_PREFIX + $"ExtremePrejudice_Circle_{@event.TargetId}";
             dp.Owner = @event.TargetId;
             dp.Scale = new Vector2(16);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -328,7 +353,7 @@ namespace KodakkuAssistXSZYYS
         {
             accessory.Log.Debug($"指令 (Tether 0130) 触发: 绘制十字AOE, 目标: {@event.TargetId}");
             var dp1 = accessory.Data.GetDefaultDrawProperties();
-            dp1.Name = $"ExtremePrejudice_Cross1_{@event.TargetId}";
+            dp1.Name = DRAW_PREFIX + $"ExtremePrejudice_Cross1_{@event.TargetId}";
             dp1.Owner = @event.TargetId;
             dp1.Scale = new Vector2(10, 80);
             dp1.Color = accessory.Data.DefaultDangerColor;
@@ -336,7 +361,7 @@ namespace KodakkuAssistXSZYYS
             dp1.ScaleMode |= ScaleMode.ByTime;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp1);
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = $"ExtremePrejudice_Cross2_{@event.TargetId}";
+            dp2.Name = DRAW_PREFIX + $"ExtremePrejudice_Cross2_{@event.TargetId}";
             dp2.Owner = @event.TargetId;
             dp2.Scale = new Vector2(10, 80);
             dp2.Rotation = MathF.PI / 2;
@@ -347,7 +372,7 @@ namespace KodakkuAssistXSZYYS
         }
 
         [ScriptMethod(
-            name: "指令 - 圆形 (目标) (指令罐)",
+            name: "指令 - 圆形 (来源) (指令罐)",
             eventType: EventTypeEnum.Tether,
             eventCondition: ["Id:0132"]
         )]
@@ -355,7 +380,7 @@ namespace KodakkuAssistXSZYYS
         {
             accessory.Log.Debug($"指令 (Tether 0132) 触发: 绘制圆形AOE, 目标: {@event.SourceId}");
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"ExtremePrejudice_Circle_{@event.SourceId}";
+            dp.Name = DRAW_PREFIX + $"ExtremePrejudice_Circle_{@event.SourceId}";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(16);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -375,12 +400,12 @@ namespace KodakkuAssistXSZYYS
             uint actionId = @event.ActionId;
             if (actionId == 41421 || actionId == 39471)
             {
-                accessory.Method.RemoveDraw($"ExtremePrejudice_Cross1_{@event.SourceId}");
-                accessory.Method.RemoveDraw($"ExtremePrejudice_Cross2_{@event.SourceId}");
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}ExtremePrejudice_Cross1_{@event.SourceId}$");
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}ExtremePrejudice_Cross2_{@event.SourceId}$");
             }
             else // StoneSwell (圆形)
             {
-                accessory.Method.RemoveDraw($"ExtremePrejudice_Circle_{@event.SourceId}");
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}ExtremePrejudice_Circle_{@event.SourceId}$");
             }
         }
         #region 进化加鲁拉
@@ -393,13 +418,16 @@ namespace KodakkuAssistXSZYYS
         )]
         public void AgitatedGroanVisual(Event @event, ScriptAccessory accessory)
         {
-            if (!_noiseComplaintCenterRecorded)
+            lock (_garulaLock)
             {
-                if (TryDeserializeVector3(@event["SourcePosition"], out var center))
+                if (!_noiseComplaintCenterRecorded)
                 {
-                    _noiseComplaintArenaCenter = center;
-                    _noiseComplaintCenterRecorded = true;
-                    accessory.Log.Debug($"进化加鲁拉 Arena Center recorded at: {_noiseComplaintArenaCenter}");
+                    if (TryDeserializeVector3(@event["SourcePosition"], out var center))
+                    {
+                        _noiseComplaintArenaCenter = center;
+                        _noiseComplaintCenterRecorded = true;
+                        accessory.Log.Debug($"进化加鲁拉 Arena Center recorded at: {_noiseComplaintArenaCenter}");
+                    }
                 }
             }
         }
@@ -412,7 +440,7 @@ namespace KodakkuAssistXSZYYS
         public void EpicenterShock(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "NoiseComplaint_EpicenterShock_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "NoiseComplaint_EpicenterShock_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(12);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -429,7 +457,7 @@ namespace KodakkuAssistXSZYYS
         public void MammothBolt(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "NoiseComplaint_MammothBolt_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "NoiseComplaint_MammothBolt_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(25);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -446,7 +474,7 @@ namespace KodakkuAssistXSZYYS
         public void LightningCrossing(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "NoiseComplaint_LightningCrossing_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "NoiseComplaint_LightningCrossing_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(70);
             dp.Radian = DegToRad(45);
@@ -464,7 +492,7 @@ namespace KodakkuAssistXSZYYS
         public void Heave(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"NoiseComplaint_Heave_Danger_Zone_{@event.ActionId}";
+            dp.Name = DRAW_PREFIX + $"NoiseComplaint_Heave_Danger_Zone_{@event.ActionId}";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60);
             dp.Radian = DegToRad(120);
@@ -482,11 +510,14 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RushingRumbleRampage_Status(Event @event, ScriptAccessory accessory)
         {
-            var boss = accessory.Data.Objects.SearchById(@event.TargetId);
-            if (boss == null || boss.DataId != 18078) return;
-            // Extra == "0x350" is Cardinal, "0x351" is Intercardinal
-            _lightningIsCardinal = @event["Param"] == "848";
-            TryDrawMechanics(accessory);
+            lock (_garulaLock)
+            {
+                var boss = accessory.Data.Objects.SearchById(@event.TargetId);
+                if (boss == null || boss.DataId != 18078) return;
+                // Param 为十进制字符串：848 (0x350) 为基本方向，849 (0x351) 为斜角方向。
+                _lightningIsCardinal = @event["Param"] == "848";
+                TryDrawMechanics(accessory);
+            }
         }
         [ScriptMethod(
             name: "冲锋-小鸟记录 (进化加鲁拉)",
@@ -496,28 +527,31 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RushingRumbleRampage_Icon(Event @event, ScriptAccessory accessory)
         {
-            if (_isRampageSequenceRunning)
+            lock (_garulaLock)
             {
-                accessory.Log.Debug($"检测到连续冲锋的小鸟标记。冲锋索引: {_rampageChargeIndex}。");
-                var bird = accessory.Data.Objects.SearchById(@event.TargetId);
-                if (bird == null)
+                if (_isRampageSequenceRunning)
                 {
-                    accessory.Log.Error($"未能找到用于连续冲锋 {_rampageChargeIndex} 的小鸟 {@event.TargetId}。");
-                    ResetState();
-                    return;
+                    accessory.Log.Debug($"检测到连续冲锋的小鸟标记。冲锋索引: {_rampageChargeIndex}。");
+                    var bird = accessory.Data.Objects.SearchById(@event.TargetId);
+                    if (bird == null)
+                    {
+                        accessory.Log.Error($"未能找到用于连续冲锋 {_rampageChargeIndex} 的小鸟 {@event.TargetId}。");
+                        ResetState();
+                        return;
+                    }
+                    DrawRampageCharge(accessory, _rampageNextChargeStartPos, bird, _rampageChargeIndex);
+                    if (_rampageChargeIndex >= 3)
+                    {
+                        accessory.Log.Debug("连续冲锋序列完成。");
+                        ResetState();
+                    }
                 }
-                DrawRampageCharge(accessory, _rampageNextChargeStartPos, bird, _rampageChargeIndex);
-                if (_rampageChargeIndex >= 3)
+                else
                 {
-                    accessory.Log.Debug("连续冲锋序列完成。");
-                    ResetState();
+                    _activeBirds.Enqueue(@event.TargetId);
+                    accessory.Log.Debug($"小鸟ID: {@event.TargetId} 已为非连续冲锋机制入队。队列数量: {_activeBirds.Count}");
+                    TryDrawMechanics(accessory);
                 }
-            }
-            else
-            {
-                _activeBirds.Enqueue(@event.TargetId);
-                accessory.Log.Debug($"小鸟ID: {@event.TargetId} 已为非连续冲锋机制入队。队列数量: {_activeBirds.Count}");
-                TryDrawMechanics(accessory);
             }
         }
 
@@ -528,9 +562,12 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnRushingRumbleStart(Event @event, ScriptAccessory accessory)
         {
-            _activeMechanicId = ACTION_RUSHING_RUMBLE;
-            _bossId = @event.SourceId;
-            TryDrawMechanics(accessory);
+            lock (_garulaLock)
+            {
+                _activeMechanicId = ACTION_RUSHING_RUMBLE;
+                _bossId = @event.SourceId;
+                TryDrawMechanics(accessory);
+            }
         }
 
         [ScriptMethod(
@@ -540,9 +577,12 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnBirdserkRushStart(Event @event, ScriptAccessory accessory)
         {
-            _activeMechanicId = ACTION_BIRDSERK_RUSH;
-            _bossId = @event.SourceId;
-            TryDrawMechanics(accessory);
+            lock (_garulaLock)
+            {
+                _activeMechanicId = ACTION_BIRDSERK_RUSH;
+                _bossId = @event.SourceId;
+                TryDrawMechanics(accessory);
+            }
         }
 
         [ScriptMethod(
@@ -552,11 +592,15 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnRampageStart(Event @event, ScriptAccessory accessory)
         {
-            _activeMechanicId = ACTION_RAMPAGE;
-            _bossId = @event.SourceId;
-            TryDrawMechanics(accessory);
+            lock (_garulaLock)
+            {
+                _activeMechanicId = ACTION_RAMPAGE;
+                _bossId = @event.SourceId;
+                TryDrawMechanics(accessory);
+            }
         }
 
+        // 以下加鲁拉私有 helper 均由持有 _garulaLock 的入口调用，绘制与状态消费、重置不可交错。
         private void TryDrawMechanics(ScriptAccessory accessory)
         {
             if (_isRampageSequenceRunning) return;
@@ -582,18 +626,29 @@ namespace KodakkuAssistXSZYYS
                 case ACTION_RAMPAGE when _lightningIsCardinal != null && _activeBirds.Count > 0:
                     accessory.Log.Debug("条件满足，启动 Rushing Rumble Rampage 序列。");
                     var boss = accessory.Data.Objects.SearchById(_bossId);
-                    if (boss == null) { ResetState(); return; }
+                    if (boss == null)
+                    {
+                        accessory.Log.Error("无法启动连续冲锋，未找到施法者。");
+                        ResetState();
+                        return;
+                    }
                     _isRampageSequenceRunning = true;
                     _rampageChargeIndex = 0;
                     _rampageNextChargeStartPos = boss.Position;
-                    if (_activeBirds.TryDequeue(out var birdId))
+                    if (!_activeBirds.TryDequeue(out var birdId))
                     {
-                        var bird = accessory.Data.Objects.SearchById(birdId);
-                        if (bird != null)
-                        {
-                            DrawRampageCharge(accessory, _rampageNextChargeStartPos, bird, _rampageChargeIndex);
-                        }
+                        accessory.Log.Error("无法启动连续冲锋，小鸟队列为空。");
+                        ResetState();
+                        return;
                     }
+                    var bird = accessory.Data.Objects.SearchById(birdId);
+                    if (bird == null)
+                    {
+                        accessory.Log.Error($"无法启动连续冲锋，未找到小鸟 {birdId}。");
+                        ResetState();
+                        return;
+                    }
+                    DrawRampageCharge(accessory, _rampageNextChargeStartPos, bird, _rampageChargeIndex);
                     break;
             }
         }
@@ -608,9 +663,6 @@ namespace KodakkuAssistXSZYYS
             _rampageChargeIndex = 0;
         }
 
-        /// <summary>
-        /// 绘制进化加鲁拉的四向扇形AOE
-        /// </summary>
         private void DrawGarulaFourFans(ScriptAccessory accessory, Vector3 position, Vector3 directionFrom, ulong uniqueId, int chargeIndex = -1)
         {
             var initialAngle = MathF.Atan2(directionFrom.X, directionFrom.Z);
@@ -623,7 +675,7 @@ namespace KodakkuAssistXSZYYS
             {
                 var dpCone = accessory.Data.GetDefaultDrawProperties();
                 string nameSuffix = chargeIndex >= 0 ? $"_{chargeIndex}_{i}" : $"_{i}";
-                dpCone.Name = $"NoiseComplaint_Cone_{uniqueId}{nameSuffix}";
+                dpCone.Name = DRAW_PREFIX + $"NoiseComplaint_Cone_{uniqueId}{nameSuffix}";
                 dpCone.Position = position;
                 dpCone.Scale = new Vector2(GARULA_FAN_RADIUS);
                 dpCone.Radian = DegToRad(45);
@@ -635,13 +687,10 @@ namespace KodakkuAssistXSZYYS
             }
         }
 
-        /// <summary>
-        /// 绘制冲锋直线+落地圆形的组合
-        /// </summary>
         private void DrawGarulaChargeWithCircle(ScriptAccessory accessory, Vector3 startPos, Vector3 endPos, string namePrefix, ulong? ownerId = null, ulong? targetId = null)
         {
             var dpCharge = accessory.Data.GetDefaultDrawProperties();
-            dpCharge.Name = $"{namePrefix}_Charge";
+            dpCharge.Name = DRAW_PREFIX + $"{namePrefix}_Charge";
             dpCharge.Scale = new Vector2(GARULA_CHARGE_WIDTH, 100);
             dpCharge.ScaleMode |= ScaleMode.YByDistance;
             dpCharge.Color = accessory.Data.DefaultDangerColor;
@@ -662,7 +711,7 @@ namespace KodakkuAssistXSZYYS
             }
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dpCharge);
             var dpCircle = accessory.Data.GetDefaultDrawProperties();
-            dpCircle.Name = $"{namePrefix}_Circle";
+            dpCircle.Name = DRAW_PREFIX + $"{namePrefix}_Circle";
             dpCircle.Position = endPos;
             dpCircle.Scale = new Vector2(GARULA_CIRCLE_RADIUS);
             dpCircle.Color = accessory.Data.DefaultDangerColor;
@@ -686,67 +735,6 @@ namespace KodakkuAssistXSZYYS
             }
         }
 
-        private Vector3 GetLineArenaIntersection(Vector3 start, Vector3 end, ScriptAccessory accessory)
-        {
-            if (_noiseComplaintArenaCenter == null) return GetArenaEdgePosition(end);
-
-            Vector2 center = new Vector2(_noiseComplaintArenaCenter.Value.X, _noiseComplaintArenaCenter.Value.Z);
-            Vector2 p1 = new Vector2(start.X, start.Z);
-            Vector2 p2 = new Vector2(end.X, end.Z);
-
-            if (Vector2.DistanceSquared(p2, center) <= GARULA_ARENA_RADIUS * GARULA_ARENA_RADIUS)
-            {
-                return end;
-            }
-
-            Vector2 d = p2 - p1;
-            Vector2 f = p1 - center;
-
-            float a = Vector2.Dot(d, d);
-            float b = 2 * Vector2.Dot(f, d);
-            float c = Vector2.Dot(f, f) - GARULA_ARENA_RADIUS * GARULA_ARENA_RADIUS;
-
-            float discriminant = b * b - 4 * a * c;
-
-            if (discriminant < 0)
-            {
-                return GetArenaEdgePosition(end);
-            }
-
-            float sqrtDiscriminant = MathF.Sqrt(discriminant);
-            float t1 = (-b - sqrtDiscriminant) / (2 * a);
-            float t2 = (-b + sqrtDiscriminant) / (2 * a);
-
-            var validIntersections = new List<Vector3>();
-
-            if (t1 >= 0 && t1 <= 1)
-            {
-                Vector2 intersection2D = p1 + t1 * d;
-                var point = new Vector3(intersection2D.X, start.Y, intersection2D.Y);
-                validIntersections.Add(point);
-            }
-            if (t2 >= 0 && t2 <= 1)
-            {
-                Vector2 intersection2D = p1 + t2 * d;
-                var point = new Vector3(intersection2D.X, start.Y, intersection2D.Y);
-                validIntersections.Add(point);
-            }
-
-            if (validIntersections.Count == 0)
-            {
-                return GetArenaEdgePosition(end);
-            }
-            if (validIntersections.Count == 1)
-            {
-                return validIntersections[0];
-            }
-
-            var dist1 = Vector3.DistanceSquared(validIntersections[0], end);
-            var dist2 = Vector3.DistanceSquared(validIntersections[1], end);
-
-            return dist1 <= dist2 ? validIntersections[0] : validIntersections[1];
-        }
-
         private void DrawRushingRumble(ScriptAccessory accessory)
         {
             if (!_activeBirds.TryDequeue(out var birdId)) return;
@@ -766,7 +754,7 @@ namespace KodakkuAssistXSZYYS
             var bird = accessory.Data.Objects.SearchById(birdId);
             if (bird == null) return;
             var dpCharge = accessory.Data.GetDefaultDrawProperties();
-            dpCharge.Name = $"NoiseComplaint_BirdserkRush_Charge_{_bossId}";
+            dpCharge.Name = DRAW_PREFIX + $"NoiseComplaint_BirdserkRush_Charge_{_bossId}";
             dpCharge.Owner = _bossId;
             dpCharge.TargetObject = bird.EntityId;
             dpCharge.Scale = new Vector2(GARULA_CHARGE_WIDTH, 100);
@@ -775,7 +763,7 @@ namespace KodakkuAssistXSZYYS
             dpCharge.DestoryAt = 6300;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dpCharge);
             var dpCone = accessory.Data.GetDefaultDrawProperties();
-            dpCone.Name = $"NoiseComplaint_BirdserkRush_Cone_{_bossId}";
+            dpCone.Name = DRAW_PREFIX + $"NoiseComplaint_BirdserkRush_Cone_{_bossId}";
             dpCone.Owner = _bossId;
             dpCone.TargetObject = bird.EntityId;
             dpCone.Scale = new Vector2(60);
@@ -791,10 +779,11 @@ namespace KodakkuAssistXSZYYS
             if (_lightningIsCardinal == null)
             {
                 accessory.Log.Error("无法绘制连续冲锋，雷电方向未知。");
+                ResetState();
                 return;
             }
 
-            // 计算目标位置：所有冲锋的终点都是小鸟与场地中心连线与场边的交点
+            // 小鸟在场外时沿场地中心到小鸟的方向投影至场边，场内则使用小鸟位置。
             var destination = GetArenaEdgePosition(bird.Position);
             DrawGarulaChargeWithCircle(accessory, chargeStartPos, destination, $"NoiseComplaint_Rampage_{chargeIndex}");
             var chargeDirectionVector = destination - chargeStartPos;
@@ -816,7 +805,7 @@ namespace KodakkuAssistXSZYYS
         {
             var nailId = @event.ActionId;
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"死亡爪_LethalNails_{nailId}";
+            dp.Name = DRAW_PREFIX + $"死亡爪_LethalNails_{nailId}";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(7, 60);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -858,7 +847,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < 4; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
+                dp.Name = DRAW_PREFIX + $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
                 dp.Owner = @event.SourceId;
                 dp.Scale = new Vector2(50);
                 dp.Radian = DegToRad(90);
@@ -890,7 +879,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < 4; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
+                dp.Name = DRAW_PREFIX + $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
                 dp.Owner = @event.SourceId;
                 dp.Scale = new Vector2(50);
                 dp.Radian = DegToRad(90);
@@ -923,7 +912,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < 4; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
+                dp.Name = DRAW_PREFIX + $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
                 dp.Owner = @event.SourceId;
                 dp.Scale = new Vector2(50);
                 dp.Radian = DegToRad(90);
@@ -955,7 +944,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < 4; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
+                dp.Name = DRAW_PREFIX + $"死亡爪_Crosshatch_{names[i]}_{@event.SourceId}";
                 dp.Owner = @event.SourceId;
                 dp.Scale = new Vector2(50);
                 dp.Radian = DegToRad(90);
@@ -983,7 +972,7 @@ namespace KodakkuAssistXSZYYS
                 return;
             }
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"死亡爪_LethalClaw_{@event.SourceId}";
+            dp.Name = DRAW_PREFIX + $"死亡爪_LethalClaw_{@event.SourceId}";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(50);
             dp.Radian = DegToRad(90);
@@ -996,7 +985,7 @@ namespace KodakkuAssistXSZYYS
         private void DrawCrossAOE(ScriptAccessory accessory, string baseName, Vector3 position, float rotation, int delay, int duration)
         {
             var dp1 = accessory.Data.GetDefaultDrawProperties();
-            dp1.Name = $"{baseName}_1";
+            dp1.Name = DRAW_PREFIX + $"{baseName}_1";
             dp1.Position = position;
             dp1.Rotation = rotation;
             dp1.Scale = new Vector2(15, 200);
@@ -1006,7 +995,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp1);
 
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = $"{baseName}_2";
+            dp2.Name = DRAW_PREFIX + $"{baseName}_2";
             dp2.Position = position;
             dp2.Rotation = rotation + MathF.PI / 2;
             dp2.Scale = new Vector2(15, 100);
@@ -1032,7 +1021,7 @@ namespace KodakkuAssistXSZYYS
                 case 42766:
                     {
                         var dp = accessory.Data.GetDefaultDrawProperties();
-                        dp.Name = $"水晶龙_PrismaticWing_{actionId}";
+                        dp.Name = DRAW_PREFIX + $"水晶龙_PrismaticWing_{actionId}";
                         dp.Owner = @event.SourceId;
                         dp.Scale = new Vector2(22, 22);
                         dp.Color = accessory.Data.DefaultDangerColor;
@@ -1044,7 +1033,7 @@ namespace KodakkuAssistXSZYYS
                 case 42768:
                     {
                         var dp = accessory.Data.GetDefaultDrawProperties();
-                        dp.Name = $"水晶龙_PrismaticWing_{actionId}";
+                        dp.Name = DRAW_PREFIX + $"水晶龙_PrismaticWing_{actionId}";
                         dp.Owner = @event.SourceId;
                         dp.Scale = new Vector2(22, 22);
                         dp.Color = accessory.Data.DefaultDangerColor;
@@ -1056,7 +1045,7 @@ namespace KodakkuAssistXSZYYS
                 case 42767:
                     {
                         var dp = accessory.Data.GetDefaultDrawProperties();
-                        dp.Name = $"水晶龙_PrismaticWing_{actionId}";
+                        dp.Name = DRAW_PREFIX + $"水晶龙_PrismaticWing_{actionId}";
                         dp.Owner = @event.SourceId;
                         dp.Scale = new Vector2(31, 31);
                         dp.InnerScale = new Vector2(5, 5);
@@ -1069,7 +1058,7 @@ namespace KodakkuAssistXSZYYS
                 case 42769:
                     {
                         var dp = accessory.Data.GetDefaultDrawProperties();
-                        dp.Name = $"水晶龙_PrismaticWing_{actionId}";
+                        dp.Name = DRAW_PREFIX + $"水晶龙_PrismaticWing_{actionId}";
                         dp.Owner = @event.SourceId;
                         dp.Scale = new Vector2(31, 31);
                         dp.InnerScale = new Vector2(5, 5);
@@ -1089,7 +1078,7 @@ namespace KodakkuAssistXSZYYS
         public void CrystallizedEnergyAndChaos(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"CrawlingDeath_Crystallized_{@event.ActionId}";
+            dp.Name = DRAW_PREFIX + $"CrawlingDeath_Crystallized_{@event.ActionId}";
             dp.Owner = @event.SourceId;
             dp.Color = accessory.Data.DefaultDangerColor;
 
@@ -1198,7 +1187,7 @@ namespace KodakkuAssistXSZYYS
         public void ScathingSweep(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Sweep_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Sweep_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60, 60);
             dp.Color = new Vector4(1f, 0f, 0f, 1f);
@@ -1215,7 +1204,7 @@ namespace KodakkuAssistXSZYYS
         public void 新月狂战士Rage1(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Rage1_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Rage1_Danger_Zone";
             dp.Position = @event.TargetPosition;
             dp.Scale = new Vector2(8, 8);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1224,7 +1213,7 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
 
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = "新月狂战士_BedrockUplift1_Danger_Zone";
+            dp2.Name = DRAW_PREFIX + "新月狂战士_BedrockUplift1_Danger_Zone";
             dp2.Position = @event.TargetPosition;
             dp2.Scale = new Vector2(60, 60);
             dp2.InnerScale = new Vector2(8, 8);
@@ -1242,7 +1231,7 @@ namespace KodakkuAssistXSZYYS
         public void 新月狂战士Rage2(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Rage2_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Rage2_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(24, 24);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1250,7 +1239,7 @@ namespace KodakkuAssistXSZYYS
             dp.ScaleMode |= ScaleMode.ByTime;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = "新月狂战士_BedrockUplift2_Danger_Zone";
+            dp2.Name = DRAW_PREFIX + "新月狂战士_BedrockUplift2_Danger_Zone";
             dp2.Owner = @event.SourceId;
             dp2.Scale = new Vector2(60, 60);
             dp2.InnerScale = new Vector2(24, 24);
@@ -1268,7 +1257,7 @@ namespace KodakkuAssistXSZYYS
         public void 新月狂战士Rage3(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Rage3_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Rage3_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(16, 16);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1277,7 +1266,7 @@ namespace KodakkuAssistXSZYYS
             dp.ScaleMode |= ScaleMode.ByTime;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = "新月狂战士_BedrockUplift3_Danger_Zone";
+            dp2.Name = DRAW_PREFIX + "新月狂战士_BedrockUplift3_Danger_Zone";
             dp2.Owner = @event.SourceId;
             dp2.Scale = new Vector2(60, 60);
             dp2.InnerScale = new Vector2(16, 16);
@@ -1295,7 +1284,7 @@ namespace KodakkuAssistXSZYYS
         public void 新月狂战士Rage4(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Rage4_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Rage4_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(8, 8);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1304,7 +1293,7 @@ namespace KodakkuAssistXSZYYS
             dp.ScaleMode |= ScaleMode.ByTime;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp2.Name = "新月狂战士_BedrockUplift4_Danger_Zone";
+            dp2.Name = DRAW_PREFIX + "新月狂战士_BedrockUplift4_Danger_Zone";
             dp2.Owner = @event.SourceId;
             dp2.Scale = new Vector2(60, 60);
             dp2.InnerScale = new Vector2(16, 16);
@@ -1322,7 +1311,7 @@ namespace KodakkuAssistXSZYYS
         public void 新月狂战士Fury(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "新月狂战士_Fury_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "新月狂战士_Fury_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(13, 13);
             dp.Color = new Vector4(1f, 0f, 0f, 1f);
@@ -1340,7 +1329,7 @@ namespace KodakkuAssistXSZYYS
         public void Explosion(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "回廊恶魔_Explosion_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "回廊恶魔_Explosion_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(22, 22);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1356,7 +1345,7 @@ namespace KodakkuAssistXSZYYS
         public void TidalBreath(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "回廊恶魔_TidalBreath_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "回廊恶魔_TidalBreath_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(40);
             dp.Radian = DegToRad(180);
@@ -1392,7 +1381,7 @@ namespace KodakkuAssistXSZYYS
             for (int i = 0; i < totalExplosions; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"CompanyOfStone_DualfistFlurry_Danger_Zone_{i}";
+                dp.Name = DRAW_PREFIX + $"CompanyOfStone_DualfistFlurry_Danger_Zone_{i}";
                 dp.Position = currentPos;
                 dp.Scale = new Vector2(radius);
                 dp.Color = accessory.Data.DefaultDangerColor;
@@ -1420,11 +1409,9 @@ namespace KodakkuAssistXSZYYS
             }
             float initialRotation = caster.Rotation;
 
-            // 1. 根据技能ID判断旋转方向
             // 41822 = 顺时针(CW), 41823 = 逆时针(CCW)
             int rotationDirection = (@event.ActionId == 41822) ? -1 : 1;
 
-            // 2. 定义绘图参数
             const float crossLength = 120f;
             const float crossWidth = 6f;
             const int rotationInterval = 1700;  // 旋转间隔 1.7s
@@ -1438,7 +1425,7 @@ namespace KodakkuAssistXSZYYS
                 if (lifeSpan <= 0) continue;
                 float currentRotation = initialRotation + (i * rotationDirection * rotationAngleRad);
                 var dp1 = accessory.Data.GetDefaultDrawProperties();
-                dp1.Name = $"SpinningSiege_{@event.ActionId}_Cross1_{i}";
+                dp1.Name = DRAW_PREFIX + $"SpinningSiege_{@event.ActionId}_Cross1_{i}";
                 dp1.Position = @event.SourcePosition;
                 dp1.Scale = new Vector2(crossWidth, crossLength);
                 dp1.Rotation = currentRotation;
@@ -1447,7 +1434,7 @@ namespace KodakkuAssistXSZYYS
                 dp1.DestoryAt = lifeSpan;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp1);
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp2.Name = $"SpinningSiege_{@event.ActionId}_Cross2_{i}";
+                dp2.Name = DRAW_PREFIX + $"SpinningSiege_{@event.ActionId}_Cross2_{i}";
                 dp2.Position = @event.SourcePosition;
                 dp2.Scale = new Vector2(crossWidth, crossLength);
                 dp2.Rotation = currentRotation + (MathF.PI / 2);
@@ -1470,8 +1457,8 @@ namespace KodakkuAssistXSZYYS
             var actionId = @event.ActionId;
             var dp = accessory.Data.GetDefaultDrawProperties();
             var dp2 = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"鬼火苗_分身机制_{actionId}";
-            dp2.Name = $"鬼火苗_分身机制_{actionId}_2";
+            dp.Name = DRAW_PREFIX + $"鬼火苗_分身机制_{actionId}";
+            dp2.Name = DRAW_PREFIX + $"鬼火苗_分身机制_{actionId}_2";
             switch (actionId)
             {
                 case 41397:
@@ -1531,7 +1518,7 @@ namespace KodakkuAssistXSZYYS
             else // ShadesNestBoss
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = "鬼火苗_Boss_Donut";
+                dp.Name = DRAW_PREFIX + "鬼火苗_Boss_Donut";
                 dp.Owner = @event.SourceId;
                 dp.Color = accessory.Data.DefaultDangerColor;
                 dp.Radian = DegToRad(360);
@@ -1553,7 +1540,7 @@ namespace KodakkuAssistXSZYYS
         public void HydrocleaveDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "SharkAttack_Hydrocleave_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "SharkAttack_Hydrocleave_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(50);
             dp.Radian = DegToRad(60);
@@ -1569,21 +1556,24 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnTidalGuillotineFirstCast(Event @event, ScriptAccessory accessory)
         {
-            _tidalGuillotineAoes.Clear();
+            lock (_tidalLock)
+            {
+                _tidalGuillotineAoes.Clear();
 
-            if (!TryDeserializeVector3(@event["EffectPosition"], out var pos)) return;
-            var castTime = 8000;
-            var name = $"TidalGuillotine_AOE_0";
-            _tidalGuillotineAoes.Add((name, castTime));
-            var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = name;
-            dp.Position = pos;
-            dp.Scale = new Vector2(20);
-            dp.Color = accessory.Data.DefaultDangerColor;
-            dp.DestoryAt = castTime + 1000;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                if (!TryDeserializeVector3(@event["EffectPosition"], out var pos)) return;
+                var castTime = 8000;
+                var name = DRAW_PREFIX + $"TidalGuillotine_AOE_0";
+                _tidalGuillotineAoes.Add((name, castTime));
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = name;
+                dp.Position = pos;
+                dp.Scale = new Vector2(20);
+                dp.Color = accessory.Data.DefaultDangerColor;
+                dp.DestoryAt = castTime + 1000;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
 
-            accessory.Log.Debug($"记录了第一个潮汐断头台AOE，位置: {pos}");
+                accessory.Log.Debug($"记录了第一个潮汐断头台AOE，位置: {pos}");
+            }
         }
         [ScriptMethod(
             name: "怒潮断头台 - 记录后续AOE(尼姆瓣齿鲨)",
@@ -1592,23 +1582,26 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnTidalGuillotineTeleport(Event @event, ScriptAccessory accessory)
         {
-            if (_tidalGuillotineAoes.Count >= 3) return;
+            lock (_tidalLock)
+            {
+                if (_tidalGuillotineAoes.Count >= 3) return;
 
-            if (!TryDeserializeVector3(@event["EffectPosition"], out var pos)) return;
-            var index = _tidalGuillotineAoes.Count;
-            var name = $"TidalGuillotine_AOE_{index}";
-            var delay = index == 1 ? 8700 : 9900;
-            _tidalGuillotineAoes.Add((name, delay));
-            var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = name;
-            dp.Position = pos;
-            dp.Scale = new Vector2(20);
-            dp.Color = accessory.Data.DefaultDangerColor;
-            dp.Delay = delay - 5000;
-            dp.DestoryAt = 5000;
-            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                if (!TryDeserializeVector3(@event["EffectPosition"], out var pos)) return;
+                var index = _tidalGuillotineAoes.Count;
+                var name = DRAW_PREFIX + $"TidalGuillotine_AOE_{index}";
+                var delay = index == 1 ? 8700 : 9900;
+                _tidalGuillotineAoes.Add((name, delay));
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = name;
+                dp.Position = pos;
+                dp.Scale = new Vector2(20);
+                dp.Color = accessory.Data.DefaultDangerColor;
+                dp.Delay = delay - 5000;
+                dp.DestoryAt = 5000;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
 
-            accessory.Log.Debug($"记录了第 {index + 1} 个潮汐断头台AOE，位置: {pos}");
+                accessory.Log.Debug($"记录了第 {index + 1} 个潮汐断头台AOE，位置: {pos}");
+            }
         }
         [ScriptMethod(
             name: "开放水域-地火(尼姆瓣齿鲨)",
@@ -1620,7 +1613,7 @@ namespace KodakkuAssistXSZYYS
             var caster = accessory.Data.Objects.SearchById(@event.SourceId);
             if (caster == null) return;
 
-            // --- 1. 判断模式并设定参数 ---
+            // 内外圈以15码为界，分别使用下方的次数、间隔和转角。
             var dirToCaster = caster.Position - SharkArenaCenter;
             var isInnerMode = dirToCaster.LengthSquared() < 15f * 15f;
 
@@ -1644,12 +1637,11 @@ namespace KodakkuAssistXSZYYS
                 aoeRadius = 4f;
             }
 
-            // --- 2. 计算旋转方向 ---
+            // 径向向量与施法者朝向的叉积符号决定沿圆周推进的方向。
             var forwardVector = new Vector3(MathF.Sin(caster.Rotation), 0, MathF.Cos(caster.Rotation));
             var rotationDirection = (Vector3.Cross(dirToCaster, forwardVector).Y < 0) ? 1.0f : -1.0f;
             var signedRotationIncrement = rotationDirection * rotationIncrementRad;
 
-            // --- 3. 预先计算所有AOE的位置 ---
             var aoePositions = new List<Vector3>();
             for (int i = 0; i < maxCasts; i++)
             {
@@ -1664,20 +1656,18 @@ namespace KodakkuAssistXSZYYS
                 aoePositions.Add(SharkArenaCenter + rotatedDir);
             }
 
-            // --- 4. 一次性发送所有绘图指令 ---
             for (int i = 0; i < aoePositions.Count; i++)
             {
                 var dp = accessory.Data.GetDefaultDrawProperties();
-                dp.Name = $"OpenWater_Refactored_AOE_{i}";
+                dp.Name = DRAW_PREFIX + $"OpenWater_Refactored_AOE_{i}";
                 dp.Position = aoePositions[i];
                 dp.Scale = new Vector2(aoeRadius);
 
-                // 第一个圈使用更醒目的颜色
                 dp.Color = (i == 0)
                     ? new Vector4(1, 0, 0, 0.8f)
                     : accessory.Data.DefaultDangerColor;
 
-                // 计算每个AOE的出现和消失时间
+                // 首次爆炸在5秒后，后续按内外圈间隔推进，各圈提前5秒显示。
                 int explosionTime = 5000 + (i * intervalMs);
                 int appearanceTime = explosionTime - 5000;
 
@@ -1706,7 +1696,7 @@ namespace KodakkuAssistXSZYYS
         public void 圣焰Draw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "城塞守卫_圣焰_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "城塞守卫_圣焰_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(5, 60);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -1727,6 +1717,9 @@ namespace KodakkuAssistXSZYYS
             {
                 lock (_surgeLock)
                 {
+                    if (_spheres.Contains(sphere.EntityId) || _spheresWind.Contains(sphere.EntityId)
+                        || _spheresStone.Contains(sphere.EntityId) || _surgeAoes.ContainsKey(sphere.EntityId))
+                        return;
                     _spheres.Add(sphere.EntityId);
                 }
                 accessory.Log.Debug($"记录一个新的能量球: {sphere.Name}, ID: {sphere.EntityId}");
@@ -1743,12 +1736,12 @@ namespace KodakkuAssistXSZYYS
             var sphere = accessory.Data.Objects.SearchById(@event.TargetId);
             if (sphere == null) return;
 
-            // status.Extra (Param) 用于区分风(0x224)或石(0x225)
+            // Param 为十进制字符串：548 (0x224) 为风，549 (0x225) 为石。
             var statusParam = @event["Param"];
 
             lock (_surgeLock)
             {
-                if (!_spheres.Contains(sphere.EntityId)) return; // 在锁内检查
+                if (!_spheres.Contains(sphere.EntityId)) return;
 
                 if (statusParam == "548")
                 {
@@ -1775,7 +1768,6 @@ namespace KodakkuAssistXSZYYS
             var caster = accessory.Data.Objects.SearchById(@event.SourceId);
             if (caster == null) return;
 
-            // 根据ActionId判断技能类型(风/石)和咏唱时间
             List<ulong> originalSphereList;
             int castTimeMs;
 
@@ -1803,7 +1795,6 @@ namespace KodakkuAssistXSZYYS
 
             accessory.Log.Debug($"检测到BOSS咏唱 {@event.ActionId} (咏唱时间: {castTimeMs}ms), 开始检测范围内的能量球。");
 
-            // 在锁内创建列表副本以进行安全的迭代
             List<ulong> sphereIdsToCheck;
             lock (_surgeLock)
             {
@@ -1832,7 +1823,7 @@ namespace KodakkuAssistXSZYYS
                         accessory.Log.Debug($"能量球 {sphereId} 在攻击范围内，准备绘制AOE。");
 
                         var dp = accessory.Data.GetDefaultDrawProperties();
-                        var drawName = $"Surge_AOE_{sphereId}";
+                        var drawName = DRAW_PREFIX + $"Surge_AOE_{sphereId}";
 
                         dp.Name = drawName;
                         dp.Position = sphere.Position;
@@ -1842,11 +1833,11 @@ namespace KodakkuAssistXSZYYS
                         dp.DestoryAt = 7500;
                         dp.ScaleMode |= ScaleMode.ByTime;
 
-                        accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
                         lock (_surgeLock)
                         {
+                            if (!originalSphereList.Remove(sphereId)) continue;
                             _surgeAoes[sphereId] = drawName;
-                            originalSphereList.Remove(sphereId);
+                            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
                         }
                     }
                 }
@@ -1861,7 +1852,10 @@ namespace KodakkuAssistXSZYYS
         public void OnAncientHolyCast(Event @event, ScriptAccessory accessory)
         {
             accessory.Log.Debug($"检测到BOSS开始咏唱神圣 ({@event.ActionId})，延迟光球判定。");
-            _isHolyCasting = true;
+            lock (_surgeLock)
+            {
+                _isHolyCasting = true;
+            }
         }
         [ScriptMethod(
             name: "风石光 - 神圣咏唱完成并引爆光球(城塞守卫)",
@@ -1870,55 +1864,38 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnAncientHolyFinish(Event @event, ScriptAccessory accessory)
         {
-            if (!_isHolyCasting) return;
-
-            accessory.Log.Debug("神圣咏唱完成，开始处理剩余的光球。");
-
-            List<ulong> lightSphereIds;
             lock (_surgeLock)
             {
-                if (_spheres.Count == 0)
-                {
-                    _isHolyCasting = false;
-                    return;
-                }
-                lightSphereIds = new List<ulong>(_spheres);
-            }
-
-            // 爆炸发生在咏唱完成后约2.4秒
-            const int explosionDelay = 2400;
-
-            foreach (var sphereId in lightSphereIds)
-            {
-                var sphere = accessory.Data.Objects.SearchById(sphereId);
-                if (sphere == null) continue;
-
-                accessory.Log.Debug($"光球 {sphereId} 将在 {explosionDelay}ms 后爆炸。");
-
-                var dp = accessory.Data.GetDefaultDrawProperties();
-                var drawName = $"Surge_AOE_Light_{sphereId}";
-
-                dp.Name = drawName;
-                dp.Position = sphere.Position;
-                dp.Scale = new Vector2(15);
-                dp.Color = accessory.Data.DefaultDangerColor;
-                dp.DestoryAt = 2400;
-                dp.ScaleMode |= ScaleMode.ByTime;
-
-                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
-
-                lock (_surgeLock)
-                {
-                    _surgeAoes[sphereId] = drawName;
-                }
-            }
-
-            lock (_surgeLock)
-            {
+                if (!_isHolyCasting) return;
+                _isHolyCasting = false;
+                var lightSphereIds = new List<ulong>(_spheres);
                 _spheres.Clear();
-            }
 
-            _isHolyCasting = false;
+                accessory.Log.Debug("神圣咏唱完成，开始处理剩余的光球。");
+
+                // 爆炸发生在咏唱完成后约2.4秒。
+                const int explosionDelay = 2400;
+                foreach (var sphereId in lightSphereIds)
+                {
+                    var sphere = accessory.Data.Objects.SearchById(sphereId);
+                    if (sphere == null) continue;
+
+                    accessory.Log.Debug($"光球 {sphereId} 将在 {explosionDelay}ms 后爆炸。");
+
+                    var dp = accessory.Data.GetDefaultDrawProperties();
+                    var drawName = DRAW_PREFIX + $"Surge_AOE_Light_{sphereId}";
+
+                    dp.Name = drawName;
+                    dp.Position = sphere.Position;
+                    dp.Scale = new Vector2(15);
+                    dp.Color = accessory.Data.DefaultDangerColor;
+                    dp.DestoryAt = explosionDelay;
+                    dp.ScaleMode |= ScaleMode.ByTime;
+
+                    _surgeAoes[sphereId] = drawName;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                }
+            }
         }
 
         [ScriptMethod(
@@ -1930,11 +1907,13 @@ namespace KodakkuAssistXSZYYS
         public void OnSurgeExplosion(Event @event, ScriptAccessory accessory)
         {
             var explodingSphereId = @event.SourceId;
-            if (_surgeAoes.TryGetValue(explodingSphereId, out var drawName))
+            lock (_surgeLock)
             {
-                accessory.Method.RemoveDraw(drawName);
-                _surgeAoes.Remove(explodingSphereId);
-                accessory.Log.Debug($"清理AOE绘制: {drawName}");
+                if (_surgeAoes.Remove(explodingSphereId, out var drawName))
+                {
+                    accessory.Method.RemoveDraw($"^{drawName}$");
+                    accessory.Log.Debug($"清理AOE绘制: {drawName}");
+                }
             }
         }
         public void ResetWindStoneLightSurgeState()
@@ -1958,7 +1937,7 @@ namespace KodakkuAssistXSZYYS
         public void OnDarkIIDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "夺心魔_昏暗_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "夺心魔_昏暗_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(65);
             dp.Radian = DegToRad(90);
@@ -1975,7 +1954,7 @@ namespace KodakkuAssistXSZYYS
         public void 触手Draw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "夺心魔_触手_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "夺心魔_触手_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Color = accessory.Data.DefaultDangerColor;
             dp.ScaleMode |= ScaleMode.ByTime;
@@ -2061,7 +2040,7 @@ namespace KodakkuAssistXSZYYS
             var npc = accessory.Data.Objects.SearchById(@event.TargetId);
             if (npc == null || npc.DataId != OID_JestingJackanapes) return;
             accessory.Log.Debug($"陷阱NPC {@event.TargetId} 获得元素状态, 收到的Param值为: '{@event["Param"]}'");
-            // 根据status.Extra(Param)判断元素，0x344是火，否则是冰
+            // Param 为十进制字符串：836 (0x344) 为火，其余沿用冰陷阱判定。
             var isFire = @event["Param"] == "836";
 
             var trap = new FireIceTrapInfo
@@ -2073,7 +2052,11 @@ namespace KodakkuAssistXSZYYS
 
             lock (_trapLock)
             {
-                _fireIceTraps.Add(trap);
+                int trapIndex = _fireIceTraps.FindIndex(t => t.NpcId == trap.NpcId);
+                if (trapIndex >= 0)
+                    _fireIceTraps[trapIndex] = trap;
+                else
+                    _fireIceTraps.Add(trap);
             }
             accessory.Log.Debug($"发现一个新的{(isFire ? "火" : "冰")}陷阱，位于 {trap.Position}");
             DrawFireIceTraps(accessory);
@@ -2089,13 +2072,15 @@ namespace KodakkuAssistXSZYYS
             {
                 var casterPosition = @event.SourcePosition;
 
-                int trapIndex = _fireIceTraps.FindIndex(t => Vector3.Distance(t.Position, casterPosition) < 1.0f);
+                int trapIndex = _fireIceTraps.FindIndex(t => t.NpcId == @event.SourceId);
+                if (trapIndex < 0)
+                    trapIndex = _fireIceTraps.FindIndex(t => Vector3.Distance(t.Position, casterPosition) < 1.0f);
 
                 if (trapIndex != -1)
                 {
                     var oldTrap = _fireIceTraps[trapIndex];
                     var newPosition = @event.EffectPosition;
-                    accessory.Log.Debug($"陷阱从 {oldTrap.Position} 移动到 {newPosition} (通过位置匹配)");
+                    accessory.Log.Debug($"陷阱 {oldTrap.NpcId} 从 {oldTrap.Position} 移动到 {newPosition}");
                     var updatedTrap = new FireIceTrapInfo
                     {
                         NpcId = oldTrap.NpcId,
@@ -2122,75 +2107,93 @@ namespace KodakkuAssistXSZYYS
             accessory.Log.Debug("陷阱已爆炸，清理所有绘图和状态。");
             lock (_trapLock)
             {
+                if (_disposed) return;
+                _trapRevision++;
+                _trapCts.Cancel();
+                _trapCts.Dispose();
+                _trapCts = new CancellationTokenSource();
                 _fireIceTraps.Clear();
                 _playerElements.Clear();
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}FireIceTrap_.*");
             }
-            accessory.Method.RemoveDraw("FireIceTrap_.*");
         }
 
         private void DrawFireIceTraps(ScriptAccessory accessory)
         {
-            // Remove stale drawings before redrawing.
-            accessory.Method.RemoveDraw("FireIceTrap_.*");
-
-            // Give the removal command time to complete before redrawing.
-            Thread.Sleep(50);
             List<FireIceTrapInfo> trapsCopy;
+            long revision;
+            CancellationToken token;
+            bool playerHasElement;
+            bool playerIsFire;
             lock (_trapLock)
             {
+                if (_disposed) return;
+                revision = ++_trapRevision;
+                _trapCts.Cancel();
+                _trapCts.Dispose();
+                _trapCts = new CancellationTokenSource();
+                token = _trapCts.Token;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}FireIceTrap_.*");
                 trapsCopy = _fireIceTraps.ToList();
+                playerHasElement = _playerElements.TryGetValue(accessory.Data.Me, out playerIsFire);
             }
-            _playerElements.TryGetValue(accessory.Data.Me, out var playerIsFire);
-            bool playerHasElement = _playerElements.ContainsKey(accessory.Data.Me);
-            if (playerHasElement)
+            // 大于2只小丑为20秒，否则为10秒。
+            int trapWarningDurationMs = trapsCopy.Count > 2 ? 20000 : 10000;
+            _ = Task.Run(async () =>
             {
-                accessory.Log.Debug($"[绘图前检查] 脚本认为你的状态是: {(playerIsFire ? "火" : "冰")}");
-            }
-            else
-            {
-                accessory.Log.Debug("[绘图前检查] 脚本认为你没有元素状态。");
-            }
-            int trapWarningDurationMs = _fireIceTraps.Count > 2 ? 20000 : 10000; // 大于2只小丑为20秒，否则为10秒
-            if (trapsCopy.Any())
-            {
-                accessory.Log.Debug($"当前陷阱数量: {trapsCopy.Count}, 警告持续时间设置为: {trapWarningDurationMs}ms");
-            }
-            foreach (var trap in trapsCopy)
-            {
-                if (!playerHasElement)
+                try
                 {
-                    var dp = accessory.Data.GetDefaultDrawProperties();
-                    dp.Name = $"FireIceTrap_Small_{trap.NpcId}";
-                    dp.Position = trap.Position;
-                    dp.Scale = new Vector2(8);
-                    dp.Color = accessory.Data.DefaultDangerColor;
-                    dp.DestoryAt = trapWarningDurationMs;
-                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
-                    continue;
+                    await Task.Delay(50, token).ConfigureAwait(false);
+                    lock (_trapLock)
+                    {
+                        // 检查与发图共用锁，防止清理后旧回调重新画出已结束的陷阱。
+                        if (_disposed || token.IsCancellationRequested || revision != _trapRevision) return;
+                        foreach (var trap in trapsCopy)
+                        {
+                            if (!playerHasElement)
+                            {
+                                var dp = accessory.Data.GetDefaultDrawProperties();
+                                dp.Name = DRAW_PREFIX + $"FireIceTrap_Small_{trap.NpcId}";
+                                dp.Position = trap.Position;
+                                dp.Scale = new Vector2(8);
+                                dp.Color = accessory.Data.DefaultDangerColor;
+                                dp.DestoryAt = trapWarningDurationMs;
+                                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                                continue;
+                            }
+                            bool isSameElement = (playerIsFire == trap.IsFire);
+                            if (isSameElement)
+                            {
+                                var dp = accessory.Data.GetDefaultDrawProperties();
+                                dp.Name = DRAW_PREFIX + $"FireIceTrap_Big_Danger_{trap.NpcId}";
+                                dp.Position = trap.Position;
+                                dp.Scale = new Vector2(38);
+                                dp.Color = new Vector4(1.0f, 0.2f, 0.2f, 0.6f);
+                                dp.DestoryAt = trapWarningDurationMs;
+                                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                            }
+                            else
+                            {
+                                var dp = accessory.Data.GetDefaultDrawProperties();
+                                dp.Name = DRAW_PREFIX + $"FireIceTrap_Small_Safe_{trap.NpcId}";
+                                dp.Position = trap.Position;
+                                dp.Scale = new Vector2(8);
+                                dp.Color = new Vector4(1.0f, 0.2f, 0.2f, 0.6f);
+                                dp.DestoryAt = trapWarningDurationMs;
+                                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                            }
+                        }
+                    }
                 }
-                bool isSameElement = (playerIsFire == trap.IsFire);
-                accessory.Log.Debug($"[循环判断] 陷阱 {trap.NpcId}: 玩家是火({playerIsFire}), 陷阱是火({trap.IsFire}). --> 元素是否相同: {isSameElement}");
-                if (isSameElement)
+                catch (OperationCanceledException) when (token.IsCancellationRequested)
                 {
-                    var dp = accessory.Data.GetDefaultDrawProperties();
-                    dp.Name = $"FireIceTrap_Big_Danger_{trap.NpcId}";
-                    dp.Position = trap.Position;
-                    dp.Scale = new Vector2(38);
-                    dp.Color = new Vector4(1.0f, 0.2f, 0.2f, 0.6f);
-                    dp.DestoryAt = trapWarningDurationMs;
-                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                    // 重绘被新排程、Init、爆炸或卸载主动取消，属于正常失效，无需报错。
                 }
-                else
+                catch (Exception ex)
                 {
-                    var dp = accessory.Data.GetDefaultDrawProperties();
-                    dp.Name = $"FireIceTrap_Small_Safe_{trap.NpcId}";
-                    dp.Position = trap.Position;
-                    dp.Scale = new Vector2(8);
-                    dp.Color = new Vector4(1.0f, 0.2f, 0.2f, 0.6f);
-                    dp.DestoryAt = trapWarningDurationMs;
-                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                    accessory.Log.Error($"火冰陷阱延迟重绘失败 (revision={revision}): {ex}");
                 }
-            }
+            });
         }
 
         #endregion
@@ -2204,7 +2207,7 @@ namespace KodakkuAssistXSZYYS
         public void 恐怖闪光Draw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "跃立狮_恐怖闪光_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "跃立狮_恐怖闪光_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(60);
             dp.Radian = DegToRad(90);
@@ -2222,7 +2225,7 @@ namespace KodakkuAssistXSZYYS
         public void OnDecompressDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "跃立狮_Decompress_Danger_Zone";
+            dp.Name = DRAW_PREFIX + "跃立狮_Decompress_Danger_Zone";
             dp.Owner = @event.SourceId;
             dp.Scale = new Vector2(12);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -2246,15 +2249,14 @@ namespace KodakkuAssistXSZYYS
                 return;
             }
 
-            // 计算从中心指向目标的向量
             var directionVector = target.Position - OnTheHuntAreaCenter;
 
-            // 将向量转换为角度，并加上固定的200度旋转
+            // 从场地中心指向连线目标的方向固定旋转200度。
             var angle = MathF.Atan2(directionVector.X, directionVector.Z);
             var finalRotation = angle + DegToRad(200);
 
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"CrystalDragon_AetherialRay_{target.EntityId}";
+            dp.Name = DRAW_PREFIX + $"CrystalDragon_AetherialRay_{target.EntityId}";
             dp.Position = OnTheHuntAreaCenter;
             dp.Scale = new Vector2(10, 28);
             dp.Rotation = finalRotation;
@@ -2275,25 +2277,19 @@ namespace KodakkuAssistXSZYYS
             var roundel = accessory.Data.Objects.SearchById(@event.TargetId);
             if (roundel == null || roundel.DataId != 18142) return;
 
-            // 1. 计算从中心到光球的方向向量
             var dir = roundel.Position - OnTheHuntAreaCenter;
 
-            // 2. 判断光球在内圈还是外圈，决定基础旋转角度
-            // 半径15的平方是225
+            // 以15码半径区分内外圈，分别旋转280度、150度。
             var angleDegrees = dir.LengthSquared() < 225f ? 280f : 150f;
 
-            // 3. 判断光球的朝向，决定旋转是顺时针还是逆时针
-            // 获取光球的正前方向量
+            // 右正交向量与光球朝向的点积符号决定旋转方向。
             var forwardVector = new Vector3(MathF.Sin(roundel.Rotation), 0, MathF.Cos(roundel.Rotation));
-            // 计算方向向量的垂直向量 (OrthoR)
             var orthoR = new Vector3(dir.Z, 0, -dir.X);
-            // 点积判断方向
             if (Vector3.Dot(orthoR, forwardVector) > 0f)
             {
-                angleDegrees = -angleDegrees; // 反向旋转
+                angleDegrees = -angleDegrees;
             }
 
-            // 4. 计算最终AOE位置
             var angleRadians = DegToRad(angleDegrees);
             var rotatedDir = new Vector3(
                 dir.X * MathF.Cos(angleRadians) - dir.Z * MathF.Sin(angleRadians),
@@ -2302,9 +2298,8 @@ namespace KodakkuAssistXSZYYS
             );
             var aoePosition = OnTheHuntAreaCenter + rotatedDir;
 
-            // 5. 绘制AOE
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = $"CrystalDragon_BrightPulse_{roundel.EntityId}";
+            dp.Name = DRAW_PREFIX + $"CrystalDragon_BrightPulse_{roundel.EntityId}";
             dp.Position = aoePosition;
             dp.Scale = new Vector2(13);
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -2325,12 +2320,12 @@ namespace KodakkuAssistXSZYYS
         {
             if (@event.ActionId == 41402) // AetherialRay
             {
-                accessory.Method.RemoveDraw("CrystalDragon_AetherialRay_.*");
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}CrystalDragon_AetherialRay_.*");
                 accessory.Log.Debug("清理以太射线绘图。");
             }
             else if (@event.ActionId == 41403) // BrightPulse
             {
-                accessory.Method.RemoveDraw($"CrystalDragon_BrightPulse_{@event.SourceId}");
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}CrystalDragon_BrightPulse_{@event.SourceId}$");
                 accessory.Log.Debug($"清理明亮脉冲绘图: {@event.SourceId}");
             }
         }
@@ -2345,7 +2340,7 @@ namespace KodakkuAssistXSZYYS
         public void OnCostOfLivingKB(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "CostOfLivingKBDraw";
+            dp.Name = DRAW_PREFIX + "CostOfLivingKBDraw";
             dp.Owner = accessory.Data.Me;
             dp.Scale = new Vector2(1.5f, 30f);
             dp.Rotation = 180f * MathF.PI / 180f;
@@ -2368,7 +2363,7 @@ namespace KodakkuAssistXSZYYS
                 return;
             }
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "ForcedMovementDraw";
+            dp.Name = DRAW_PREFIX + "ForcedMovementDraw";
             dp.Owner = accessory.Data.Me;
             dp.Scale = new Vector2(1.5f, 35f);
             dp.Color = new(0.3f, 1.0f, 0f, 1.5f);
@@ -2388,7 +2383,7 @@ namespace KodakkuAssistXSZYYS
         public void OnFluidSwingDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "FluidSwing";
+            dp.Name = DRAW_PREFIX + "FluidSwing";
             dp.Radian = 90 * MathF.PI / 180f;
             dp.Scale = new Vector2(60);
             dp.ScaleMode = ScaleMode.ByTime;
@@ -2405,7 +2400,7 @@ namespace KodakkuAssistXSZYYS
         public void OnHeatVortexDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "HeatVortex";
+            dp.Name = DRAW_PREFIX + "HeatVortex";
             dp.Scale = new Vector2(10);
             dp.ScaleMode = ScaleMode.ByTime;
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -2421,7 +2416,7 @@ namespace KodakkuAssistXSZYYS
         public void OnFireBlastDraw(Event @event, ScriptAccessory accessory)
         {
             var dp = accessory.Data.GetDefaultDrawProperties();
-            dp.Name = "FireBlast";
+            dp.Name = DRAW_PREFIX + "FireBlast";
             dp.Scale = new Vector2(6, 25);
             dp.ScaleMode = ScaleMode.ByTime;
             dp.Color = accessory.Data.DefaultDangerColor;
@@ -2434,54 +2429,45 @@ namespace KodakkuAssistXSZYYS
 
         #region Helper
 
-        /// <summary>
-        /// 将角度转换为弧度
-        /// </summary>
-        /// <param name="degrees">角度值</param>
-        /// <returns>对应的弧度值</returns>
         private static float DegToRad(float degrees) => degrees * MathF.PI / 180.0f;
 
-        /// <summary>
-        /// 安全地从JSON字符串反序列化Vector3
-        /// </summary>
         private static bool TryDeserializeVector3(string json, out Vector3 result)
         {
+            result = default;
+            if (string.IsNullOrWhiteSpace(json)) return false;
             try
             {
-                if (string.IsNullOrEmpty(json))
-                {
-                    result = default;
+                var deserialized = JsonConvert.DeserializeObject<Vector3?>(json);
+                if (!deserialized.HasValue)
                     return false;
-                }
-                var deserialized = JsonConvert.DeserializeObject<Vector3>(json);
-                result = deserialized;
+                var value = deserialized.Value;
+                if (!float.IsFinite(value.X) || !float.IsFinite(value.Y) || !float.IsFinite(value.Z))
+                    return false;
+                result = value;
                 return true;
             }
-            catch
+            catch (JsonException)
             {
-                result = default;
+                // 事件字段格式失败时允许忽略本次绘图，其他异常交由宿主记录。
                 return false;
             }
         }
 
-        /// <summary>
-        /// 安全地从JSON字符串反序列化float
-        /// </summary>
         private static bool TryDeserializeFloat(string json, out float result)
         {
+            result = default;
+            if (string.IsNullOrWhiteSpace(json)) return false;
             try
             {
-                if (string.IsNullOrEmpty(json))
-                {
-                    result = default;
+                var deserialized = JsonConvert.DeserializeObject<float?>(json);
+                if (!deserialized.HasValue || !float.IsFinite(deserialized.Value))
                     return false;
-                }
-                result = JsonConvert.DeserializeObject<float>(json);
+                result = deserialized.Value;
                 return true;
             }
-            catch
+            catch (JsonException)
             {
-                result = default;
+                // 事件字段格式失败时允许忽略本次绘图，其他异常交由宿主记录。
                 return false;
             }
         }

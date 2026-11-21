@@ -1,0 +1,2686 @@
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Numerics;
+using System.Threading;
+using System.Threading.Tasks;
+using KodakkuAssist.Data;
+using KodakkuAssist.Extensions;
+using KodakkuAssist.Module.Draw;
+using KodakkuAssist.Module.Draw.Manager;
+using KodakkuAssist.Module.GameEvent;
+using KodakkuAssist.Module.GameEvent.Struct;
+using KodakkuAssist.Script;
+
+namespace KodakkuAssistXSZYYS
+{
+    public enum StrategySelection
+    {
+        ABC_123,  // 代表钰子烧分组攻略
+        Pos_152463, // 代表 152463 分组攻略
+        LemonCookie // 代表 柠檬烧饼 分组攻略
+    }
+
+    public enum TeamSelection
+    {
+        A,
+        B,
+        C,
+        One,
+        Two,
+        Three
+    }
+
+    public enum PositionSelection
+    {
+        Pos1,
+        Pos2,
+        Pos3,
+        Pos4,
+        Pos5,
+        Pos6
+    }
+    // 圣枪专用：分组覆盖（None=不变；左上=A；右上=B；下=C）
+    public enum LanceGuideOverride
+    {
+        None,
+        左上,
+        右上,
+        下
+    }
+
+    [ScriptType(
+    name: "力之塔",
+    guid: "874D3ECF-BD6B-448F-BB42-AE7F082E4805",
+    territorys: [1252],
+    version: "0.0.41",
+    author: "XSZYYS",
+    updateInfo: "分离警察功能；修复柠檬松饼凝冰冲击分组；使用可取消异步延时并增加生命周期校验；统一绘图命名、清理范围与TTS接口。",
+    note: "本脚本负责战斗绘图、指路、TTS及宝箱连线。\r\n点名播报、统计、聊天查询和药师标记请另行安装独立脚本「力之塔（警察）」。\r\n藏宝图：1.5道中给箱子连线\r\n\r\n请选择自己小队的分组，指路可选ABC123/152463/柠檬松饼攻略\r\n老一:\r\nAOE绘制：旋转，压溃\r\n指路：陨石点名，第一次踩塔，第二次踩塔\r\n老二：\r\nAOE绘制：死刑，扇形，冰火爆炸\r\n指路：雪球，火球（按职能指路）\r\n老三：\r\nAOE绘制：龙态行动，冰圈，俯冲\r\n指路：龙态行动预站位，踩塔，小怪\r\n尾王：\r\nAOE绘制：致命斧/枪，暗杀短剑\r\n指路：符文之斧，圣枪"
+    )]
+
+    public class 力之塔 : IDisposable
+    {
+        #region User_Settings_用户设置
+        [UserSetting("-----全局设置----- (此设置无实际意义)")]
+        public bool _____Global_Settings_____ { get; set; } = true;
+        [UserSetting("启用TTS")]
+        public bool EnableTTS { get; set; } = true;
+        [UserSetting("启用文字横幅提示")]
+        public bool EnableTextBanner { get; set; } = true;
+        [UserSetting("攻略分组策略(钰子烧即ABC123/152463/柠檬松饼)")]
+        public StrategySelection SelectedStrategy { get; set; } = StrategySelection.ABC_123;
+
+        [UserSetting("【钰子烧】请选择您在团队中被分配到的分组")]
+        public TeamSelection MyTeam { get; set; } = TeamSelection.A;
+
+        [UserSetting("【152463】请选择您在团队中被分配到的分组")]
+        public PositionSelection MyPosition { get; set; } = PositionSelection.Pos1;
+        [UserSetting("【柠檬松饼】请选择您在团队中被分配到的分组")]
+        public PositionSelection MyLemonCookiePosition { get; set; } = PositionSelection.Pos1;
+        [UserSetting("符文之斧长点名小圈指路（会出现两个箭头指向左上和右上平台）")]
+        public bool LongPointName { get; set; } = false;
+        [UserSetting("圣枪分组覆盖（None=不变）")]
+        public LanceGuideOverride HolyLanceGroupOverride { get; set; } = LanceGuideOverride.None;
+        [UserSetting("-----开发者设置----- (此设置无实际意义)")]
+        public bool _____Developer_Settings_____ { get; set; } = true;
+
+        [UserSetting("启用开发者模式")]
+        public bool Enable_Developer_Mode { get; set; } = false;
+
+        #endregion
+
+        private const string DRAW_PREFIX = "ForkedTower_";
+        private readonly object _lifecycleLock = new();
+        // 初始化与延时回调共用此锁，使代次检查和绘图相对重置保持原子性。
+        private int _generation;
+        private CancellationTokenSource _combatCts = new();
+        private bool _disposed;
+        private int _turnLeftRightCount = 0;
+        private bool _hasCometeorStatus = false;
+        private ulong _cometeorTargetId = 0;
+        private const float ArenaCenterZ = 379f; // 定义老一场地中心Z轴坐标
+        private static readonly Vector3 Boss1ArenaCenter = new(700f, -481.01f, 379f);
+        private bool? _isCasterInUpperHalf = null;
+        private static readonly Vector3 Pos_A = new(704.49f, -481.01f, 365.38f);
+        private static readonly Vector3 Pos_B = new(699.98f, -481.01f, 355.49f);
+        private static readonly Vector3 Pos_C = new(695.49f, -481.01f, 365.38f);
+        private static readonly Vector3 Pos_One = new(695.49f, -481.01f, 392.60f);
+        private static readonly Vector3 Pos_Two = new(699.98f, -481.01f, 402.49f);
+        private static readonly Vector3 Pos_Three = new(704.49f, -481.01f, 392.60f);
+
+        private readonly object _iceFireLock = new();
+        private readonly List<Vector3> _blueCircles = new();
+        private readonly List<Vector3> _redCircles = new();
+        private int _pairsProcessed = 0;
+        private int _snowballRushCastCount = 0;
+        private int _letterGroupRushCount = 0;
+        private int _numberGroupRushCount = 0;
+        private Vector3? _letterGroupNextPos;
+        private Vector3? _numberGroupNextPos;
+        private readonly object _snowballLock = new();
+        private readonly object _fireballLock = new();
+        private static readonly Vector3 InitialPosLetterGroup = new(-800.00f, -876.00f, 349.50f);
+        private static readonly Vector3 InitialPosNumberGroup = new(-809.09f, -876.00f, 365.25f);
+        private static readonly Vector3 SnowballArenaCenter = new(-800.00f, -876.00f, 360.00f);
+        private ulong _tetherSourceId = 0;
+        private readonly List<Vector3> _fireballPositions = new();
+        // 定义两组火球的固定坐标
+        private static readonly List<Vector3> LetterGroupFireballCoords = new()
+        {
+            new Vector3(-817.32f, -876.00f, 350.00f),
+            new Vector3(-817.32f, -876.00f, 370.00f),
+            new Vector3(-800.00f, -876.00f, 380.00f)
+        };
+        private static readonly List<Vector3> NumberGroupFireballCoords = new()
+        {
+            new Vector3(-782.68f, -876.00f, 350.00f),
+            new Vector3(-800.00f, -876.00f, 340.00f),
+            new Vector3(-782.68f, -876.00f, 370.00f)
+        };
+        private static readonly Vector3 Boss3ArenaCenter = new(-337.00f, -840.00f, 157.00f); // Boss3场地中心位置
+        private enum PuddleType
+        {
+            Circle,
+            Cross
+        }
+        private readonly ConcurrentDictionary<ulong, PuddleType> _puddles = new();
+        // 冰塔分组坐标
+        private static readonly Dictionary<TeamSelection, List<Vector3>> TowerPositions_ABC123 = new()
+        {
+            { TeamSelection.A, new List<Vector3> { new(-346.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 148.00f), new(-355.5f, -840.0f, 138.5f), new(-337.0f, -840.0f, 131.0f) } },
+            { TeamSelection.B, new List<Vector3> { new(-337.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 131.0f), new(-318.5f, -840.0f, 138.5f) } },
+            { TeamSelection.C, new List<Vector3> { new(-328.00f, -840.00f, 151.00f), new(-331.00f, -840.00f, 148.00f), new(-318.5f, -840.0f, 138.5f), new(-311.0f, -840.0f, 157.0f) } },
+            { TeamSelection.One, new List<Vector3> { new(-328.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 166.00f), new(-318.5f, -840.0f, 175.5f), new(-337.0f, -840.0f, 183.0f) } },
+            { TeamSelection.Two, new List<Vector3> { new(-337.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 183.0f), new(-355.5f, -840.0f, 175.5f) } },
+            { TeamSelection.Three, new List<Vector3> { new(-346.00f, -840.00f, 163.00f), new(-343.00f, -840.00f, 166.00f), new(-355.5f, -840.0f, 175.5f), new(-363.0f, -840.0f, 157.0f) } }
+        };
+        // 152463 攻略的冰塔分组坐标
+        private static readonly Dictionary<PositionSelection, List<Vector3>> TowerPositions_123456 = new()
+        {
+            { PositionSelection.Pos1, new List<Vector3> { new(-346.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 166.00f), new(-355.5f, -840.0f, 138.5f), new(-337.0f, -840.0f, 131.0f) } },
+            { PositionSelection.Pos2, new List<Vector3> { new(-328.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 148.00f), new(-318.5f, -840.0f, 138.5f), new(-311.0f, -840.0f, 157.0f) } },
+            { PositionSelection.Pos3, new List<Vector3> { new(-328.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 148.00f), new(-318.5f, -840.0f, 175.5f), new(-337.0f, -840.0f, 183.0f) } },
+            { PositionSelection.Pos4, new List<Vector3> { new(-346.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 166.00f), new(-355.5f, -840.0f, 175.5f), new(-363.0f, -840.0f, 157.0f) } },
+            { PositionSelection.Pos5, new List<Vector3> { new(-337.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 131.0f), new(-318.5f, -840.0f, 138.5f) } },
+            { PositionSelection.Pos6, new List<Vector3> { new(-337.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 183.0f), new(-355.5f, -840.0f, 175.5f) } }
+        };
+        private static readonly Dictionary<PositionSelection, List<Vector3>> TowerPosition_Lemon = new()
+        {
+            { PositionSelection.Pos1, new List<Vector3> { new(-346.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 166.00f), new(-355.5f, -840.0f, 138.5f), new(-337.0f, -840.0f, 131.0f) } },
+            { PositionSelection.Pos2, new List<Vector3> { new(-337.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 131.0f), new(-318.5f, -840.0f, 138.5f) } },
+            { PositionSelection.Pos3, new List<Vector3> { new(-328.00f, -840.00f, 151.00f), new(-343.00f, -840.00f, 148.00f), new(-318.5f, -840.0f, 138.5f), new(-311.0f, -840.0f, 157.0f) } },
+            { PositionSelection.Pos4, new List<Vector3> { new(-346.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 166.00f), new(-355.5f, -840.0f, 175.5f), new(-363.0f, -840.0f, 157.0f) } },
+            { PositionSelection.Pos5, new List<Vector3> { new(-337.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 157.00f), new(-337.0f, -840.0f, 183.0f), new(-355.5f, -840.0f, 175.5f) } },
+            { PositionSelection.Pos6, new List<Vector3> { new(-328.00f, -840.00f, 163.00f), new(-331.00f, -840.00f, 148.00f), new(-318.5f, -840.0f, 175.5f), new(-337.0f, -840.0f, 183.0f) } }
+        };
+        //小怪分组坐标
+        private static readonly Dictionary<TeamSelection, Vector3> GroupMarkerPositions = new()
+        {
+            { TeamSelection.A, new Vector3(-347.50f, -840.00f, 146.50f) },
+            { TeamSelection.B, new Vector3(-337.00f, -840.00f, 142.00f) },
+            { TeamSelection.C, new Vector3(-326.50f, -840.00f, 146.50f) },
+            { TeamSelection.One, new Vector3(-326.50f, -840.00f, 167.50f) },
+            { TeamSelection.Two, new Vector3(-337.00f, -840.00f, 172.00f) },
+            { TeamSelection.Three, new Vector3(-347.50f, -840.00f, 167.50f) }
+        };
+        // 方形AOE的固定坐标和角度
+        private static readonly List<Vector3> SquarePositions = new()
+        {
+            new(700f, -476f, -659.504f),
+            new(712.554f, -476f, -681.248f),
+            new(687.443f, -476f, -681.25f)
+        };
+        private static readonly float[] SquareAngles =
+        {
+            -45 * MathF.PI / 180.0f,
+            -15 * MathF.PI / 180.0f,
+            105 * MathF.PI / 180.0f
+        };
+        // 大斧猎物机制的三个场边坐标
+        private static readonly List<Vector3> GreataxePreyPositions = new()
+        {
+            new(699.95f, -476.00f, -705.12f),
+            new(673.07f, -476.00f, -658.11f),
+            new(726.77f, -476.00f, -658.39f)
+        };
+        // 致命枪机制的三个安全点坐标
+        private static readonly List<Vector3> CriticalLanceSafePositions = new()
+        {
+            new(693.53f, -476.00f, -670.09f),
+            new(699.82f, -476.00f, -680.72f),
+            new(706.28f, -476.00f, -670.38f)
+        };
+        // 圣枪机制的分组站位坐标
+        private static readonly Vector3 RectSideInA = new(683.71f, -476.00f, -688.60f);
+        private static readonly Vector3 RectSideOutA = new(680.45f, -476.00f, -691.63f);
+        private static readonly Vector3 RectSideInB = new(721.56f, -476.00f, -682.53f);
+        private static readonly Vector3 RectSideOutB = new(724.71f, -476.00f, -680.50f);
+        private static readonly Vector3 RectSideInC = new(695.61f, -476.00f, -653.43f);
+        private static readonly Vector3 RectSideOutC = new(694.24f, -476.00f, -648.11f);
+        private enum HolyWeaponType
+        {
+            None,
+            Axe,
+            Lance
+        }
+        private HolyWeaponType _holyWeaponType = HolyWeaponType.None;
+
+        // 仅在持有生命周期锁时调用；取消上一轮等待，并阻止已释放实例重新调度。
+        private bool ResetCombatLifecycle()
+        {
+            if (_disposed) return false;
+            _generation++;
+            _combatCts.Cancel();
+            _combatCts.Dispose();
+            _combatCts = new CancellationTokenSource();
+            return true;
+        }
+
+        private void ScheduleCombatAction(ScriptAccessory accessory, int delay, Action action)
+        {
+            lock (_lifecycleLock)
+            {
+                if (_disposed) return;
+                int generation = _generation;
+                CancellationToken token = _combatCts.Token;
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await Task.Delay(delay, token).ConfigureAwait(false);
+                        lock (_lifecycleLock)
+                        {
+                            if (_disposed || token.IsCancellationRequested || generation != _generation) return;
+                            action();
+                        }
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        // 初始化、切换Boss或卸载时主动取消，属于正常的生命周期结束。
+                    }
+                    catch (Exception ex)
+                    {
+                        accessory.Log.Error($"战斗延时任务失败（延时{delay}ms）：{ex}");
+                    }
+                });
+            }
+        }
+
+        public void Dispose()
+        {
+            lock (_lifecycleLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _generation++;
+                _combatCts.Cancel();
+                _combatCts.Dispose();
+            }
+        }
+
+        public void Init(ScriptAccessory accessory)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}.*");
+                _turnLeftRightCount = 0;
+                _hasCometeorStatus = false;
+                _cometeorTargetId = 0;
+                _isCasterInUpperHalf = null;
+                lock (_iceFireLock)
+                {
+                    _blueCircles.Clear();
+                    _redCircles.Clear();
+                    _pairsProcessed = 0;
+                }
+                lock (_snowballLock)
+                {
+                    _snowballRushCastCount = 0;
+                    _letterGroupRushCount = 0;
+                    _numberGroupRushCount = 0;
+                    _letterGroupNextPos = null;
+                    _numberGroupNextPos = null;
+                    _tetherSourceId = 0;
+                }
+                lock (_fireballLock)
+                {
+                    _fireballPositions.Clear();
+                }
+                _puddles.Clear();
+                _holyWeaponType = HolyWeaponType.None;
+                accessory.Log.Debug("力之塔战斗脚本已初始化。");
+            }
+        }
+        #region 老一
+        [ScriptMethod(
+            name: "初始化老一",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41734"],
+            userControl: false
+        )]
+        public void OnInitializeBoss1Draw(Event @event, ScriptAccessory accessory)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                _hasCometeorStatus = false;
+                _cometeorTargetId = 0;
+                _isCasterInUpperHalf = null;
+                _turnLeftRightCount = 0;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                accessory.Log.Debug("老一初始化完成。");
+            }
+        }
+
+        [ScriptMethod(
+            name: "降落（绘制）",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41812|43293|41709)$"]
+        )]
+        public void OnLandingDraw(Event @event, ScriptAccessory accessory)
+        {
+            var actionId = @event.ActionId;
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Landing_Danger_Zone";
+            dp.Owner = @event.SourceId;
+            switch (actionId)
+            {
+                case 41812:
+                    dp.Scale = new Vector2(30, 6);
+                    dp.Color = accessory.Data.DefaultDangerColor;
+                    dp.DestoryAt = 10500;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp);
+                    break;
+                case 43293:
+                    dp.Scale = new Vector2(30, 15);
+                    dp.Color = accessory.Data.DefaultDangerColor;
+                    dp.DestoryAt = 10500;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+                    break;
+                case 41709:
+                    dp.Scale = new Vector2(18);
+                    dp.Color = accessory.Data.DefaultDangerColor;
+                    dp.Delay = 8000;
+                    dp.DestoryAt = 6000;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
+                    break;
+            }
+        }
+
+        [ScriptMethod(
+            name: "降落TTS（钢铁）",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:43293"],
+            suppress: 1000
+        )]
+        public void OnLandingTTS(Event @event, ScriptAccessory accessory)
+        {
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("钢铁");
+            }
+        }
+
+        [ScriptMethod(
+            name: "降落击退TTS",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(43794|43294)$"],
+            suppress: 1000
+        )]
+        public void OnLandingKnockbackTTS(Event @event, ScriptAccessory accessory)
+        {
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("击退");
+            }
+        }
+        [ScriptMethod(
+            name: "降落(击退)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(43794|43294)$"]
+        )]
+        public void AethericBarrierKnockback(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Aetheric_Barrier_Knockback";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(30, 5);
+            dp.Color = accessory.Data.DefaultSafeColor;
+            dp.DestoryAt = 10500;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            if (EnableTextBanner) accessory.Method.TextInfo("击退", 5000);
+        }
+
+        [ScriptMethod(
+            name: "踩塔(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41720"],
+            suppress: 1000
+        )]
+        public void GroupPositionGuide(Event @event, ScriptAccessory accessory)
+        {
+            Vector3 targetPosition = new Vector3();
+
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    switch (MyTeam)
+                    {
+                        case TeamSelection.A: targetPosition = Pos_A; break;
+                        case TeamSelection.B: targetPosition = Pos_B; break;
+                        case TeamSelection.C: targetPosition = Pos_C; break;
+                        case TeamSelection.One: targetPosition = Pos_One; break;
+                        case TeamSelection.Two: targetPosition = Pos_Two; break;
+                        case TeamSelection.Three: targetPosition = Pos_Three; break;
+                    }
+                    break;
+                case StrategySelection.Pos_152463:
+                    switch (MyPosition)
+                    {
+                        case PositionSelection.Pos2: targetPosition = Pos_A; break;
+                        case PositionSelection.Pos5: targetPosition = Pos_B; break;
+                        case PositionSelection.Pos1: targetPosition = Pos_C; break;
+                        case PositionSelection.Pos4: targetPosition = Pos_One; break;
+                        case PositionSelection.Pos6: targetPosition = Pos_Two; break;
+                        case PositionSelection.Pos3: targetPosition = Pos_Three; break;
+                    }
+                    break;
+                case StrategySelection.LemonCookie:
+                    // 柠檬烧饼分组攻略
+                    // 152463组号到柠檬烧饼组号的映射：1->3, 2->1, 3->6, 4->4, 5->2, 6->5
+                    switch (MyLemonCookiePosition) // 此处枚举表示柠檬松饼的组号
+                    {
+                        case PositionSelection.Pos1: // 柠檬烧饼1组 -> 对应152463的2组位置
+                            targetPosition = Pos_A; // 152463的2组对应Pos_A
+                            break;
+                        case PositionSelection.Pos2: // 柠檬烧饼2组 -> 对应152463的5组位置
+                            targetPosition = Pos_B; // 152463的5组对应Pos_B
+                            break;
+                        case PositionSelection.Pos3: // 柠檬烧饼3组 -> 对应152463的1组位置
+                            targetPosition = Pos_C; // 152463的1组对应Pos_C
+                            break;
+                        case PositionSelection.Pos4: // 柠檬烧饼4组 -> 对应152463的4组位置
+                            targetPosition = Pos_One; // 152463的4组对应Pos_One
+                            break;
+                        case PositionSelection.Pos5: // 柠檬烧饼5组 -> 对应152463的6组位置
+                            targetPosition = Pos_Two; // 152463的6组对应Pos_Two
+                            break;
+                        case PositionSelection.Pos6: // 柠檬烧饼6组 -> 对应152463的3组位置
+                            targetPosition = Pos_Three; // 152463的3组对应Pos_Three
+                            break;
+                    }
+
+                    break;
+            }
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            var dp2 = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + $"Combat_Group_Position_Guide_{MyTeam}";
+            dp2.Name = DRAW_PREFIX + $"Combat_Group_Position_Circle_{MyTeam}";
+            dp.Owner = accessory.Data.Me;
+            dp.TargetPosition = targetPosition;
+            dp.Scale = new Vector2(1.5f);
+            dp.ScaleMode |= ScaleMode.YByDistance;
+            dp.Color = accessory.Data.DefaultSafeColor;
+            dp.DestoryAt = 15000;
+            dp2.Color = new Vector4(0, 1, 0, 0.6f);
+            dp2.Scale = new Vector2(4);
+            dp2.DestoryAt = 15000;
+            dp2.Position = targetPosition;
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp2);
+
+            if (Enable_Developer_Mode)
+            {
+                accessory.Log.Debug($"为队伍 {MyTeam} 绘制站位指引，指向坐标 {targetPosition}");
+            }
+        }
+        [ScriptMethod(
+            name: "旋转",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41731"]
+        )]
+        public void OnRotationDraw(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Rotation_Danger_Zone";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(37);
+            dp.Radian = 90f * MathF.PI / 180f;
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.DestoryAt = 8800;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Fan, dp);
+        }
+        [ScriptMethod(
+            name: "左/右转向",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41729|41730)$"]
+        )]
+        public void OnTurnLeftRightDraw(Event @event, ScriptAccessory accessory)
+        {
+            _turnLeftRightCount++;
+            var dp1 = accessory.Data.GetDefaultDrawProperties();
+            var dp2 = accessory.Data.GetDefaultDrawProperties();
+            dp1.Name = DRAW_PREFIX + "Combat_TurnLeftRight1_Danger_Zone";
+            dp1.Position = @event.SourcePosition;
+            dp1.Scale = new Vector2(66, 6);
+            dp1.Color = accessory.Data.DefaultDangerColor;
+            dp1.DestoryAt = 8800;
+            dp2.Name = DRAW_PREFIX + "Combat_TurnLeftRight2_Danger_Zone";
+            dp2.Position = @event.SourcePosition;
+            dp2.Scale = new Vector2(66, 6);
+            dp2.Color = accessory.Data.DefaultDangerColor;
+            dp2.DestoryAt = 8800;
+            dp2.Rotation = MathF.PI / 2f;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp1);
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp2);
+            if (_turnLeftRightCount == 2 || _turnLeftRightCount == 4)
+            {
+                var dpNorth = accessory.Data.GetDefaultDrawProperties();
+                dpNorth.Name = DRAW_PREFIX + $"Combat_TurnLeftRight_North_Danger_Zone_{_turnLeftRightCount}";
+                dpNorth.Position = Boss1ArenaCenter;
+                dpNorth.Rotation = MathF.PI;
+                dpNorth.Scale = new Vector2(30, 33);
+                dpNorth.Color = accessory.Data.DefaultDangerColor;
+                dpNorth.DestoryAt = 8800;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dpNorth);
+            }
+            else if (_turnLeftRightCount == 6)
+            {
+                var dpSouth = accessory.Data.GetDefaultDrawProperties();
+                dpSouth.Name = DRAW_PREFIX + "Combat_TurnLeftRight_South_Danger_Zone";
+                dpSouth.Position = Boss1ArenaCenter;
+                dpSouth.Rotation = 0;
+                dpSouth.Scale = new Vector2(30, 33);
+                dpSouth.Color = accessory.Data.DefaultDangerColor;
+                dpSouth.DestoryAt = 8800;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dpSouth);
+            }
+        }
+
+        [ScriptMethod(
+            name: "分摊点名（南侧）",
+            eventType: EventTypeEnum.TargetIcon,
+            eventCondition: ["Id:023E"]
+        )]
+        public void OnSouthStack(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_South_Stack";
+            dp.Position = Boss1ArenaCenter;
+            dp.Rotation = MathF.PI;
+            dp.Scale = new Vector2(30, 33);
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.DestoryAt = 12000;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("分摊去南侧");
+            }
+        }
+
+        [ScriptMethod(
+            name: "分摊点名（北侧）",
+            eventType: EventTypeEnum.TargetIcon,
+            eventCondition: ["Id:023F"]
+        )]
+        public void OnNorthStack(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_North_Stack";
+            dp.Position = Boss1ArenaCenter;
+            dp.Rotation = 0;
+            dp.Scale = new Vector2(30, 33);
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.DestoryAt = 12000;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("分摊去北侧");
+            }
+        }
+        [ScriptMethod(
+            name: "陨石1(指路)",
+            eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:4354"]
+        )]
+        public void OnCometeorStatusAdd(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+            _hasCometeorStatus = true;
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("陨石点名");
+            }
+            if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：玩家获得状态。");
+            TryDrawCometeorGuide(accessory);
+        }
+        [ScriptMethod(
+            name: "陨石指路 - 状态消失",
+            eventType: EventTypeEnum.StatusRemove,
+            eventCondition: ["StatusID:4354"],
+            userControl: false
+        )]
+        public void OnCometeorStatusRemove(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+            _hasCometeorStatus = false;
+            accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_Cometeor_Guide$");
+            if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：玩家状态消失，移除指路。");
+        }
+
+        [ScriptMethod(
+            name: "陨石2(指路)",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Add", "DataId:2014582"]
+        )]
+        public void OnCometeorTargetSpawn(Event @event, ScriptAccessory accessory)
+        {
+            _cometeorTargetId = @event.SourceId;
+            if (Enable_Developer_Mode) accessory.Log.Debug($"陨石机制：目标单位(PortentousCometeor)出现，ID: {@event.SourceId}。");
+            TryDrawCometeorGuide(accessory);
+        }
+        private void TryDrawCometeorGuide(ScriptAccessory accessory)
+        {
+            if (_hasCometeorStatus && _cometeorTargetId != 0)
+            {
+                if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：条件满足，开始绘制指路。");
+
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + "Combat_Cometeor_Guide";
+                dp.Owner = accessory.Data.Me;
+                dp.TargetObject = _cometeorTargetId;
+                dp.Scale = new Vector2(1.5f);
+                dp.ScaleMode |= ScaleMode.YByDistance;
+                dp.Color = accessory.Data.DefaultSafeColor;
+                dp.DestoryAt = 12000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+            }
+        }
+        [ScriptMethod(
+            name: "陨石3(初始化)",
+            eventType: EventTypeEnum.ActionEffect,
+            eventCondition: ["ActionId:41702"],
+            userControl: false
+        )]
+        public void OnCometeorActionEffect(Event @event, ScriptAccessory accessory)
+        {
+            _hasCometeorStatus = false;
+            _cometeorTargetId = 0;
+        }
+
+        [ScriptMethod(
+            name: "召唤(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41741"]
+        )]
+        public void SummonGuide(Event @event, ScriptAccessory accessory)
+        {
+            Vector3 targetPosition = new Vector3();
+            var letterGroupPos = new Vector3(700.24f, -481.00f, 360.46f);
+            var numberGroupPos = new Vector3(700.02f, -481.00f, 398.08f);
+
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    if (MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C)
+                    {
+                        targetPosition = letterGroupPos;
+                    }
+                    else
+                    {
+                        targetPosition = numberGroupPos;
+                    }
+                    break;
+                case StrategySelection.Pos_152463:
+                    switch (MyPosition)
+                    {
+                        case PositionSelection.Pos1:
+                        case PositionSelection.Pos5:
+                        case PositionSelection.Pos2:
+                            targetPosition = letterGroupPos;
+                            break;
+                        case PositionSelection.Pos4:
+                        case PositionSelection.Pos6:
+                        case PositionSelection.Pos3:
+                            targetPosition = numberGroupPos;
+                            break;
+                    }
+                    break;
+                case StrategySelection.LemonCookie:
+                    switch (MyLemonCookiePosition)
+                    {
+                        case PositionSelection.Pos1:
+                        case PositionSelection.Pos2:
+                        case PositionSelection.Pos3:
+                            targetPosition = letterGroupPos;
+                            break;
+                        case PositionSelection.Pos4:
+                        case PositionSelection.Pos5:
+                        case PositionSelection.Pos6:
+                            targetPosition = numberGroupPos;
+                            break;
+                    }
+                    break;
+            }
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Summon_Guide";
+            dp.Owner = accessory.Data.Me;
+            dp.TargetPosition = targetPosition;
+            dp.Scale = new Vector2(1.5f);
+            dp.ScaleMode |= ScaleMode.YByDistance;
+            dp.Color = accessory.Data.DefaultSafeColor;
+            dp.DestoryAt = 10000;
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+
+            if (Enable_Developer_Mode)
+            {
+                accessory.Log.Debug($"为队伍 {MyTeam} 绘制召唤集合点，指向 {targetPosition}");
+            }
+        }
+        //position.Z = 379 为分割上下半场
+        [ScriptMethod(
+            name: "浮空塔指路 - 记录半场",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41713|41711)$"],
+            userControl: false
+        )]
+        public void HalfArenaRecord(Event @event, ScriptAccessory accessory)
+        {
+            var caster = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (caster == null) return;
+
+            _isCasterInUpperHalf = caster.Position.Z > ArenaCenterZ;
+
+            if (Enable_Developer_Mode)
+            {
+                accessory.Log.Debug($"半场记录: 施法者位于 {(_isCasterInUpperHalf.Value ? "上半场" : "下半场")}");
+            }
+        }
+        [ScriptMethod(
+            name: "字母队浮空塔(指路)",
+            eventType: EventTypeEnum.ActionEffect,
+            eventCondition: ["ActionId:41707"],
+            suppress: 1000
+        )]
+        public void FloatingTowerGuide(Event @event, ScriptAccessory accessory)
+        {
+            if (_isCasterInUpperHalf == null)
+            {
+                if (Enable_Developer_Mode) accessory.Log.Error("浮空塔指路: 未能获取到之前的半场信息。");
+                return;
+            }
+
+            Vector3 targetPosition = new Vector3();
+            bool shouldDraw = false;
+
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    if (MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C)
+                    {
+                        shouldDraw = true;
+                        switch (MyTeam)
+                        {
+                            case TeamSelection.A: targetPosition = _isCasterInUpperHalf.Value ? Pos_One : Pos_A; break;
+                            case TeamSelection.B: targetPosition = _isCasterInUpperHalf.Value ? Pos_Two : Pos_B; break;
+                            case TeamSelection.C: targetPosition = _isCasterInUpperHalf.Value ? Pos_Three : Pos_C; break;
+                        }
+                    }
+                    break;
+
+                case StrategySelection.Pos_152463:
+                    switch (MyPosition)
+                    {
+                        case PositionSelection.Pos2: // Corresponds to A
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_One : Pos_A;
+                            break;
+                        case PositionSelection.Pos5: // Corresponds to B
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_Two : Pos_B;
+                            break;
+                        case PositionSelection.Pos1: // Corresponds to C
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_Three : Pos_C;
+                            break;
+                    }
+                    break;
+                case StrategySelection.LemonCookie:
+                    switch (MyLemonCookiePosition)
+                    {
+                        case PositionSelection.Pos1: // Corresponds to A
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_One : Pos_A;
+                            break;
+                        case PositionSelection.Pos2: // Corresponds to B
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_Two : Pos_B;
+                            break;
+                        case PositionSelection.Pos3: // Corresponds to C
+                            shouldDraw = true;
+                            targetPosition = _isCasterInUpperHalf.Value ? Pos_Three : Pos_C;
+                            break;
+                    }
+                    break;
+            }
+
+            if (shouldDraw)
+            {
+                var dpGuide = accessory.Data.GetDefaultDrawProperties();
+                dpGuide.Name = DRAW_PREFIX + $"Combat_Floating_Tower_Guide_Arrow";
+                dpGuide.Owner = accessory.Data.Me;
+                dpGuide.TargetPosition = targetPosition;
+                dpGuide.Scale = new Vector2(1.5f);
+                dpGuide.ScaleMode |= ScaleMode.YByDistance;
+                dpGuide.Color = accessory.Data.DefaultSafeColor;
+                dpGuide.DestoryAt = 7000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+
+                var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                dpCircle.Name = DRAW_PREFIX + $"Combat_Floating_Tower_Guide_Circle";
+                dpCircle.Position = targetPosition;
+                dpCircle.Scale = new Vector2(4);
+                dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
+                dpCircle.DestoryAt = 7000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
+            }
+
+            _isCasterInUpperHalf = null;
+        }
+        [ScriptMethod(
+            name: "数字队地面塔(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41713|41711)$"],
+            suppress: 1000
+        )]
+        public void GroundTowerGuide(Event @event, ScriptAccessory accessory)
+        {
+            var caster = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (caster == null) return;
+
+            bool isCasterInUpperHalf = caster.Position.Z > ArenaCenterZ;
+            Vector3 targetPosition = new Vector3();
+            bool shouldDraw = false;
+
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    if (MyTeam == TeamSelection.One || MyTeam == TeamSelection.Two || MyTeam == TeamSelection.Three)
+                    {
+                        shouldDraw = true;
+                        switch (MyTeam)
+                        {
+                            case TeamSelection.One: targetPosition = isCasterInUpperHalf ? Pos_One : Pos_A; break;
+                            case TeamSelection.Two: targetPosition = isCasterInUpperHalf ? Pos_Two : Pos_B; break;
+                            case TeamSelection.Three: targetPosition = isCasterInUpperHalf ? Pos_Three : Pos_C; break;
+                        }
+                    }
+                    break;
+                case StrategySelection.Pos_152463:
+                    if (MyPosition == PositionSelection.Pos3 || MyPosition == PositionSelection.Pos4 || MyPosition == PositionSelection.Pos6)
+                    {
+                        shouldDraw = true;
+                        switch (MyPosition)
+                        {
+                            case PositionSelection.Pos4: targetPosition = isCasterInUpperHalf ? Pos_One : Pos_A; break;
+                            case PositionSelection.Pos6: targetPosition = isCasterInUpperHalf ? Pos_Two : Pos_B; break;
+                            case PositionSelection.Pos3: targetPosition = isCasterInUpperHalf ? Pos_Three : Pos_C; break;
+                        }
+                    }
+                    break;
+                case StrategySelection.LemonCookie:
+                    if (MyLemonCookiePosition == PositionSelection.Pos4 ||
+                        MyLemonCookiePosition == PositionSelection.Pos5 ||
+                        MyLemonCookiePosition == PositionSelection.Pos6)
+                    {
+                        shouldDraw = true;
+                        switch (MyLemonCookiePosition)
+                        {
+                            case PositionSelection.Pos4: targetPosition = isCasterInUpperHalf ? Pos_One : Pos_A; break;
+                            case PositionSelection.Pos5: targetPosition = isCasterInUpperHalf ? Pos_Two : Pos_B; break;
+                            case PositionSelection.Pos6: targetPosition = isCasterInUpperHalf ? Pos_Three : Pos_C; break;
+                        }
+                    }
+                    break;
+            }
+
+            if (shouldDraw)
+            {
+                var dpGuide = accessory.Data.GetDefaultDrawProperties();
+                dpGuide.Name = DRAW_PREFIX + $"Combat_Ground_Tower_Guide_Arrow";
+                dpGuide.Owner = accessory.Data.Me;
+                dpGuide.TargetPosition = targetPosition;
+                dpGuide.Scale = new Vector2(1.5f);
+                dpGuide.ScaleMode |= ScaleMode.YByDistance;
+                dpGuide.Color = accessory.Data.DefaultSafeColor;
+                dpGuide.DestoryAt = 21000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+
+                var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                dpCircle.Name = DRAW_PREFIX + $"Combat_Ground_Tower_Guide_Circle";
+                dpCircle.Position = targetPosition;
+                dpCircle.Scale = new Vector2(4);
+                dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
+                dpCircle.DestoryAt = 21000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
+            }
+        }
+        [ScriptMethod(
+            name: "浮空(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41707"]
+        )]
+        public void AbcTeamSafeZone(Event @event, ScriptAccessory accessory)
+        {
+            bool shouldDraw = false;
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    if (MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C)
+                    {
+                        shouldDraw = true;
+                    }
+                    break;
+                case StrategySelection.Pos_152463:
+                    if (MyPosition == PositionSelection.Pos1 || MyPosition == PositionSelection.Pos2 || MyPosition == PositionSelection.Pos5)
+                    {
+                        shouldDraw = true;
+                    }
+                    break;
+                case StrategySelection.LemonCookie:
+                    if (MyLemonCookiePosition == PositionSelection.Pos1 || MyLemonCookiePosition == PositionSelection.Pos2 || MyLemonCookiePosition == PositionSelection.Pos3)
+                    {
+                        shouldDraw = true;
+                    }
+                    break;
+            }
+
+            if (!shouldDraw) return;
+
+            var caster = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (caster == null) return;
+
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Abc_Safe_Zone";
+            dp.Owner = caster.EntityId;
+            dp.Scale = new Vector2(4);
+            dp.Color = new Vector4(0, 1, 0, 0.6f);
+            dp.DestoryAt = 14000;
+
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp);
+
+            if (Enable_Developer_Mode)
+            {
+                accessory.Log.Debug("为浮空塔组绘制安全区。");
+            }
+        }
+        #endregion
+        #region 老二
+        [ScriptMethod(
+            name: "初始化老二",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42492"],
+            userControl: false
+        )]
+        public void OnInitializeBoss2Draw(Event @event, ScriptAccessory accessory)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                lock (_iceFireLock)
+                {
+                    _blueCircles.Clear();
+                    _redCircles.Clear();
+                    _pairsProcessed = 0;
+                }
+                lock (_snowballLock)
+                {
+                    _snowballRushCastCount = 0;
+                    _letterGroupRushCount = 0;
+                    _numberGroupRushCount = 0;
+                    _letterGroupNextPos = null;
+                    _numberGroupNextPos = null;
+                    _tetherSourceId = 0;
+                }
+                lock (_fireballLock)
+                {
+                    _fireballPositions.Clear();
+                }
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("老二初始化完成。");
+            }
+        }
+
+        [ScriptMethod(
+            name: "斩切",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42498"]
+        )]
+        public void OnSliceNDiceDraw(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Slice_N_Dice_Danger_Zone";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(70);
+            dp.Radian = 90f * MathF.PI / 180f;
+            dp.TargetObject = @event.TargetId;
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.DestoryAt = 5000;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Fan, dp);
+        }
+
+        [ScriptMethod(
+            name: "复仇爆炎/冰封/毒",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(42429|42430|42431)$"]
+        )]
+        public void OnVengeDraw(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_Revenge_Danger_Zone";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(60);
+            dp.Radian = 120f * MathF.PI / 180f;
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.DestoryAt = 5500;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Fan, dp);
+        }
+
+        [ScriptMethod(
+            name: "冰火圈 - 记录预告",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(42464|42463)$"]
+        )]
+        public void PrimordialChaosTelegraph(Event @event, ScriptAccessory accessory)
+        {
+            lock (_iceFireLock)
+            {
+                bool isBlue = @event.ActionId == 42464;
+                var position = @event.EffectPosition;
+
+                // 根据颜色将位置存入对应的列表
+                if (isBlue)
+                {
+                    _blueCircles.Add(position);
+                }
+                else
+                {
+                    _redCircles.Add(position);
+                }
+
+                // 尝试处理并绘制成对的AOE
+                ProcessAoePairs(accessory);
+            }
+        }
+
+        private void ProcessAoePairs(ScriptAccessory accessory)
+        {
+            // 只要两个列表都有圈，就说明可以凑成一对
+            while (_blueCircles.Count > 0 && _redCircles.Count > 0)
+            {
+                // 取出各自列表中的第一个圈
+                var bluePos = _blueCircles[0];
+                var redPos = _redCircles[0];
+
+                // 计算爆炸时间点
+                int explosionTime = 11000 + _pairsProcessed * 5500;
+                // 固定显示时长
+                const int displayDuration = 7000;
+                // 计算预告圈的触发时间点 (假设每个预告圈的触发间隔是2500ms)
+                int triggerTime = _pairsProcessed * 2500;
+                // 计算绘图需要延迟的时间
+                int delay = (explosionTime - displayDuration) - triggerTime;
+                if (delay < 0) delay = 0;
+                var dpBlue = accessory.Data.GetDefaultDrawProperties();
+                dpBlue.Name = DRAW_PREFIX + $"Combat_PrimordialChaos_Blue_{_pairsProcessed}";
+                dpBlue.Position = bluePos;
+                dpBlue.Scale = new Vector2(22);
+                dpBlue.Color = new Vector4(0.2f, 0.5f, 1f, 2.0f);
+                dpBlue.Delay = delay;
+                dpBlue.DestoryAt = displayDuration;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpBlue);
+
+                var dpRed = accessory.Data.GetDefaultDrawProperties();
+                dpRed.Name = DRAW_PREFIX + $"Combat_PrimordialChaos_Red_{_pairsProcessed}";
+                dpRed.Position = redPos;
+                dpRed.Scale = new Vector2(22);
+                dpRed.Color = new Vector4(1f, 0.2f, 0.2f, 2.0f);
+                dpRed.Delay = delay;
+                dpRed.DestoryAt = displayDuration;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpRed);
+
+                if (Enable_Developer_Mode) accessory.Log.Debug($"绘制第 {_pairsProcessed + 1} 对冰火圈");
+
+                _blueCircles.RemoveAt(0);
+                _redCircles.RemoveAt(0);
+                _pairsProcessed++;
+            }
+        }
+
+        [ScriptMethod(
+            name: "雪球狂奔(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42447"]
+        )]
+        public void SnowballRush(Event @event, ScriptAccessory accessory)
+        {
+            lock (_snowballLock)
+            {
+                var sourcePos = @event.SourcePosition;
+                var nextPos = @event.EffectPosition;
+
+                bool isLetterGroup = false;
+                int currentGroupRushCount = 0;
+
+                // 第一次（前两个）读条，用于分组
+                if (_snowballRushCastCount < 2)
+                {
+                    if (Vector3.DistanceSquared(sourcePos, InitialPosLetterGroup) < Vector3.DistanceSquared(sourcePos, InitialPosNumberGroup))
+                    {
+                        isLetterGroup = true;
+                        _letterGroupNextPos = nextPos;
+                        currentGroupRushCount = _letterGroupRushCount++;
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组已确定。");
+                    }
+                    else
+                    {
+                        isLetterGroup = false;
+                        _numberGroupNextPos = nextPos;
+                        currentGroupRushCount = _numberGroupRushCount++;
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组已确定。");
+                    }
+                }
+                // 后续读条，用于追踪路径
+                else
+                {
+                    if (_letterGroupNextPos.HasValue && Vector3.DistanceSquared(sourcePos, _letterGroupNextPos.Value) < 1.0f)
+                    {
+                        isLetterGroup = true;
+                        _letterGroupNextPos = nextPos;
+                        currentGroupRushCount = _letterGroupRushCount++;
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组路径更新。");
+                    }
+                    else if (_numberGroupNextPos.HasValue && Vector3.DistanceSquared(sourcePos, _numberGroupNextPos.Value) < 1.0f)
+                    {
+                        isLetterGroup = false;
+                        _numberGroupNextPos = nextPos;
+                        currentGroupRushCount = _numberGroupRushCount++;
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组路径更新。");
+                    }
+                    else
+                    {
+                        if (Enable_Developer_Mode) accessory.Log.Error("雪球狂奔: 无法匹配到路径。");
+                        return;
+                    }
+                }
+
+                // --- 颜色判断逻辑 ---
+                bool isSafe = false;
+                // currentGroupRushCount 是从0开始计数的 (0=第1次, 1=第2次, 2=第3次)
+                switch (SelectedStrategy)
+                {
+                    case StrategySelection.ABC_123:
+                        if (isLetterGroup)
+                        {
+                            if ((MyTeam == TeamSelection.A && currentGroupRushCount == 0) ||
+                                (MyTeam == TeamSelection.B && currentGroupRushCount == 1) ||
+                                (MyTeam == TeamSelection.C && currentGroupRushCount == 2))
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        else // isNumberGroup
+                        {
+                            if ((MyTeam == TeamSelection.One && currentGroupRushCount == 0) ||
+                                (MyTeam == TeamSelection.Two && currentGroupRushCount == 1) ||
+                                (MyTeam == TeamSelection.Three && currentGroupRushCount == 2))
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        break;
+
+                    case StrategySelection.Pos_152463:
+                        if (isLetterGroup) // 1组(A), 2组(B), 3组(C)
+                        {
+                            if ((MyPosition == PositionSelection.Pos1 && currentGroupRushCount == 0) || // 1组对应A组(第1次)
+                                (MyPosition == PositionSelection.Pos2 && currentGroupRushCount == 1) || // 2组对应B组(第2次)
+                                (MyPosition == PositionSelection.Pos3 && currentGroupRushCount == 2))   // 3组对应C组(第3次)
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        else // isNumberGroup 4组(One), 5组(Two), 6组(Three)
+                        {
+                            if ((MyPosition == PositionSelection.Pos4 && currentGroupRushCount == 0) || // 4组对应One组(第1次)
+                                (MyPosition == PositionSelection.Pos5 && currentGroupRushCount == 1) || // 5组对应Two组(第2次)
+                                (MyPosition == PositionSelection.Pos6 && currentGroupRushCount == 2))   // 6组对应Three组(第3次)
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        break;
+                    case StrategySelection.LemonCookie:
+                        if (isLetterGroup) // 1组(A), 2组(B), 3组(C)
+                        {
+                            if ((MyLemonCookiePosition == PositionSelection.Pos1 && currentGroupRushCount == 0) || // 1组对应A组(第1次)
+                                (MyLemonCookiePosition == PositionSelection.Pos2 && currentGroupRushCount == 1) || // 2组对应B组(第2次)
+                                (MyLemonCookiePosition == PositionSelection.Pos3 && currentGroupRushCount == 2))   // 3组对应C组(第3次)
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        else // isNumberGroup 4组(One), 5组(Two), 6组(Three)
+                        {
+                            if ((MyLemonCookiePosition == PositionSelection.Pos4 && currentGroupRushCount == 0) || // 4组对应One组(第1次)
+                                (MyLemonCookiePosition == PositionSelection.Pos5 && currentGroupRushCount == 1) || // 5组对应Two组(第2次)
+                                (MyLemonCookiePosition == PositionSelection.Pos6 && currentGroupRushCount == 2))   // 6组对应Three组(第3次)
+                            {
+                                isSafe = true;
+                            }
+                        }
+                        break;
+                }
+
+                var color = isSafe ? accessory.Data.DefaultSafeColor : accessory.Data.DefaultDangerColor;
+
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + $"Combat_SnowballRush_{_snowballRushCastCount}";
+                dp.Position = sourcePos;
+                dp.TargetPosition = nextPos;
+                dp.Scale = new Vector2(10);
+                dp.ScaleMode |= ScaleMode.YByDistance;
+                dp.Color = color;
+                dp.DestoryAt = 7000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Rect, dp);
+
+                _snowballRushCastCount++;
+            }
+        }
+        [ScriptMethod(
+            name: "凝冰冲击 - 记录连线源",
+            eventType: EventTypeEnum.Tether,
+            eventCondition: ["Id:00F6"],
+            userControl: false
+        )]
+        public void OnGlacialImpactTether(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId == accessory.Data.Me)
+            {
+                lock (_snowballLock)
+                {
+                    _tetherSourceId = @event.SourceId;
+                    if (Enable_Developer_Mode) accessory.Log.Debug($"凝冰冲击: 玩家被连线，来源ID: {_tetherSourceId}");
+                }
+            }
+        }
+        [ScriptMethod(
+            name: "凝冰冲击 (指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42451"]
+        )]
+        public void GlacialImpact(Event @event, ScriptAccessory accessory)
+        {
+            ScheduleCombatAction(accessory, 1000, () =>
+            {
+                try
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 开始读条，触发指路绘制。");
+                    lock (_snowballLock)
+                    {
+                        DrawGlacialImpactGuide(accessory);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    accessory.Log.Error($"凝冰冲击延时指路失败：{ex}");
+                }
+            });
+        }
+
+        private void DrawGlacialImpactGuide(ScriptAccessory accessory)
+        {
+            Vector3? safePosition = null;
+            Vector3? finalDropPos = null;
+
+            // 优先处理连线情况
+            if (_tetherSourceId != 0)
+            {
+                var tetherSource = accessory.Data.Objects.SearchById(_tetherSourceId);
+                if (tetherSource != null)
+                {
+                    var direction = Vector3.Normalize(SnowballArenaCenter - tetherSource.Position);
+                    safePosition = SnowballArenaCenter + direction * 5;
+                    if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 检测到连线，计算特殊安全点。");
+                }
+                else
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到连线来源单位。");
+                }
+            }
+            else // 如果没有被连线，则执行分组逻辑
+            {
+                switch (SelectedStrategy)
+                {
+                    case StrategySelection.ABC_123:
+                        bool isUserInLetterGroup = MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C;
+                        finalDropPos = isUserInLetterGroup ? _letterGroupNextPos : _numberGroupNextPos;
+                        break;
+
+                    case StrategySelection.Pos_152463:
+                        bool isPosInLetterGroup = MyPosition == PositionSelection.Pos1 || MyPosition == PositionSelection.Pos2 || MyPosition == PositionSelection.Pos3;
+                        finalDropPos = isPosInLetterGroup ? _letterGroupNextPos : _numberGroupNextPos;
+                        break;
+                    case StrategySelection.LemonCookie:
+                        // 与雪球狂奔分组一致：柠檬松饼1/2/3组跟随字母组路径。
+                        bool isLemonPosInLetterGroup = MyLemonCookiePosition == PositionSelection.Pos1 || MyLemonCookiePosition == PositionSelection.Pos2 || MyLemonCookiePosition == PositionSelection.Pos3;
+                        finalDropPos = isLemonPosInLetterGroup ? _letterGroupNextPos : _numberGroupNextPos;
+                        break;
+                }
+
+                if (finalDropPos != null)
+                {
+                    var direction = Vector3.Normalize(finalDropPos.Value - SnowballArenaCenter);
+                    safePosition = SnowballArenaCenter - direction * 5;
+                }
+                else
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到雪球最终落点。");
+                }
+            }
+
+            // 如果成功计算出安全点，则绘制指路
+            if (safePosition.HasValue)
+            {
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + "Combat_GlacialImpact_Guide";
+                dp.Owner = accessory.Data.Me;
+                dp.TargetPosition = safePosition.Value;
+                dp.Scale = new Vector2(1.5f);
+                dp.ScaleMode |= ScaleMode.YByDistance;
+                dp.Color = accessory.Data.DefaultSafeColor;
+                dp.DestoryAt = 5000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+            }
+        }
+
+        [ScriptMethod(
+            name: "凝冰冲击 - 结束",
+            eventType: EventTypeEnum.ActionEffect,
+            eventCondition: ["ActionId:42451"],
+            userControl: false
+        )]
+        public void GlacialImpactEnd(Event @event, ScriptAccessory accessory)
+        {
+            lock (_snowballLock)
+            {
+                _tetherSourceId = 0;
+            }
+            if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 机制结束，重置连线状态。");
+        }
+
+
+        [ScriptMethod(
+            name: "火球预站位(指路)",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Add", "DataId:2014637"]
+        )]
+        public void FireballPrePosition(Event @event, ScriptAccessory accessory)
+        {
+            lock (_fireballLock)
+            {
+                _fireballPositions.Clear();
+                var fireballs = accessory.Data.Objects.Where(o => o.DataId == 2014637).ToList();
+                if (!fireballs.Any()) return;
+
+                foreach (var fireball in fireballs)
+                {
+                    _fireballPositions.Add(fireball.Position);
+                }
+
+                ProcessFireballs(accessory);
+            }
+        }
+
+        [ScriptMethod(
+            name: "火球安全点重绘(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42434"],
+            suppress: 2000
+        )]
+        public void RedrawFireballGuides(Event @event, ScriptAccessory accessory)
+        {
+            lock (_fireballLock)
+            {
+                if (!_fireballPositions.Any())
+                {
+                    if (Enable_Developer_Mode) accessory.Log.Error("火球重绘: 找不到第一轮的火球坐标。");
+                    return;
+                }
+                ProcessFireballs(accessory);
+            }
+        }
+        private void ProcessFireballs(ScriptAccessory accessory)
+        {
+            bool isUserInLetterGroup = MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C;
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    isUserInLetterGroup = MyTeam == TeamSelection.A || MyTeam == TeamSelection.B || MyTeam == TeamSelection.C;
+                    break;
+                case StrategySelection.Pos_152463:
+                    isUserInLetterGroup = MyPosition == PositionSelection.Pos1 || MyPosition == PositionSelection.Pos2 || MyPosition == PositionSelection.Pos3;
+                    break;
+                case StrategySelection.LemonCookie:
+                    isUserInLetterGroup = MyLemonCookiePosition == PositionSelection.Pos1 || MyLemonCookiePosition == PositionSelection.Pos2 || MyLemonCookiePosition == PositionSelection.Pos3;
+                    break;
+            }
+            int fireballIndex = 0;
+            foreach (var fireballPos in _fireballPositions)
+            {
+                bool isLetterFireball = LetterGroupFireballCoords.Any(coord => Vector3.DistanceSquared(fireballPos, coord) < 1.0f);
+                bool isNumberFireball = NumberGroupFireballCoords.Any(coord => Vector3.DistanceSquared(fireballPos, coord) < 1.0f);
+
+                if ((isUserInLetterGroup && isLetterFireball) || (!isUserInLetterGroup && isNumberFireball))
+                {
+                    DrawPrePositionGuides(accessory, fireballPos, fireballIndex);
+                }
+                fireballIndex++;
+            }
+        }
+
+        private void DrawPrePositionGuides(ScriptAccessory accessory, Vector3 fireballPos, int uniqueId)
+        {
+            var player = accessory.Data.MyObject;
+            if (player == null) return;
+            var directionToFireball = Vector3.Normalize(fireballPos - SnowballArenaCenter);
+
+            if (IsDps(player))
+            {
+                var safePos = fireballPos + directionToFireball * 6;
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                var dp2 = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + $"Combat_Fireball_DPS_SafeZone_{uniqueId}";
+                dp.Position = safePos;
+                dp.Scale = new Vector2(1);
+                dp.Color = new Vector4(0, 1, 0, 0.6f);
+                dp.DestoryAt = 10000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp);
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
+                dp2.Scale = new Vector2(1);
+                dp2.Owner = accessory.Data.Me;
+                dp2.Color = new Vector4(0, 1, 0, 0.6f);
+                dp2.ScaleMode |= ScaleMode.YByDistance;
+                dp2.DestoryAt = 10000;
+                dp2.TargetPosition = safePos;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
+            }
+            else if (IsHealer(player))
+            {
+                var perpendicularDir2 = new Vector3(directionToFireball.Z, 0, -directionToFireball.X);
+                var safePos2 = fireballPos + perpendicularDir2 * 6;
+
+                var dp1 = accessory.Data.GetDefaultDrawProperties();
+                dp1.Name = DRAW_PREFIX + $"Combat_Fireball_Healer_SafeZone1_{uniqueId}";
+                dp1.Position = safePos2;
+                dp1.Scale = new Vector2(1);
+                dp1.Color = new Vector4(0, 1, 0, 0.6f);
+                dp1.DestoryAt = 10000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
+                var dp2 = accessory.Data.GetDefaultDrawProperties();
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
+                dp2.Scale = new Vector2(1);
+                dp2.Owner = accessory.Data.Me;
+                dp2.Color = new Vector4(0, 1, 0, 0.6f);
+                dp2.DestoryAt = 10000;
+                dp2.ScaleMode |= ScaleMode.YByDistance;
+                dp2.TargetPosition = safePos2;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
+
+            }
+            else if (IsTank(player))
+            {
+                var directionToCenter = Vector3.Normalize(SnowballArenaCenter - fireballPos);
+                var rotation = MathF.Atan2(directionToCenter.X, directionToCenter.Z);
+
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + $"Combat_Fireball_Tank_SafeZone_{uniqueId}";
+                dp.Position = fireballPos;
+                dp.Rotation = rotation;
+                dp.Scale = new Vector2(5);
+                dp.Radian = 15 * MathF.PI / 180.0f;
+                dp.Color = new Vector4(0, 1, 0, 0.6f);
+                dp.DestoryAt = 10000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Fan, dp);
+                var dp2 = accessory.Data.GetDefaultDrawProperties();
+                dp2.Name = DRAW_PREFIX + "Combat_Guide_to_safepos";
+                dp2.Scale = new Vector2(1);
+                dp2.Owner = accessory.Data.Me;
+                dp2.Color = new Vector4(0, 1, 0, 0.6f);
+                dp2.DestoryAt = 10000;
+                dp2.TargetPosition = fireballPos;
+                dp2.ScaleMode |= ScaleMode.YByDistance;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
+            }
+        }
+        [ScriptMethod(
+            name: "地热破裂 (指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:42441"]
+        )]
+        public void GeothermalRupture(Event @event, ScriptAccessory accessory)
+        {
+            List<Vector3> fireballPositions;
+            lock (_fireballLock)
+            {
+                fireballPositions = _fireballPositions.ToList();
+            }
+            if (fireballPositions.Count == 0)
+            {
+                if (Enable_Developer_Mode) accessory.Log.Error("地热破裂: 未能获取到火球位置信息。");
+                return;
+            }
+
+            int pathIndex = 0;
+
+            // 为每个记录的DPS位置绘制路径
+            foreach (var fireballPos in fireballPositions)
+            {
+                var directionToFireball = Vector3.Normalize(fireballPos - SnowballArenaCenter);
+                var startPos = fireballPos + directionToFireball * 6;
+                // 计算路径点
+                var point1 = RotatePoint(startPos, fireballPos, MathF.PI / 2); // 顺时针90度
+                var point2 = RotatePoint(startPos, fireballPos, MathF.PI);   // 顺时针180度
+
+                // 绘制从起点到90度点的路径（黄）
+                var dp1 = accessory.Data.GetDefaultDrawProperties();
+                dp1.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path1_{pathIndex}";
+                dp1.Position = startPos;
+                dp1.TargetPosition = point1;
+                dp1.Scale = new Vector2(1.5f);
+                dp1.ScaleMode |= ScaleMode.YByDistance;
+                dp1.Color = new Vector4(1f, 1f, 0f, 1f);
+                dp1.DestoryAt = 5000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp1);
+                // 绘制从起点到90度点的路径（绿）
+                var dp4 = accessory.Data.GetDefaultDrawProperties();
+                dp4.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path1_{pathIndex}";
+                dp4.Position = startPos;
+                dp4.TargetPosition = point1;
+                dp4.Scale = new Vector2(1.5f);
+                dp4.ScaleMode |= ScaleMode.YByDistance;
+                dp4.Color = new Vector4(0f, 1f, 0f, 1f);
+                dp4.Delay = 5000;
+                dp4.DestoryAt = 3000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp4);
+
+                // 绘制从90度点到180度点的路径（黄）
+                var dp2 = accessory.Data.GetDefaultDrawProperties();
+                dp2.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path2_{pathIndex}";
+                dp2.Position = point1;
+                dp2.TargetPosition = point2;
+                dp2.Scale = new Vector2(1.5f);
+                dp2.ScaleMode |= ScaleMode.YByDistance;
+                dp2.Color = new Vector4(1f, 1f, 0f, 1f);
+                dp2.DestoryAt = 8000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
+                // 绘制从90度点到180度点的路径（绿）
+                var dp3 = accessory.Data.GetDefaultDrawProperties();
+                dp3.Name = DRAW_PREFIX + $"Combat_GeothermalRupture_Path2_{pathIndex}";
+                dp3.Position = point1;
+                dp3.TargetPosition = point2;
+                dp3.Scale = new Vector2(1.5f);
+                dp3.ScaleMode |= ScaleMode.YByDistance;
+                dp3.Color = new Vector4(0f, 1f, 0f, 1f);
+                dp3.Delay = 8000;
+                dp3.DestoryAt = 3000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp3);
+
+                pathIndex++;
+            }
+        }
+
+        #endregion
+        #region 老三
+        [ScriptMethod(
+            name: "初始化老三",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:30705"],
+            userControl: false
+        )]
+        public void OnInitializeBoss3Draw(Event @event, ScriptAccessory accessory)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("老三初始化完成。");
+                _puddles.Clear();
+            }
+        }
+        [ScriptMethod(
+            name: "龙态行动",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:30657"]
+        )]
+        public void OnDraconiformMotionDraw(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            var dp2 = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Danger_Zone1";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(60);
+            dp.Radian = 90f * MathF.PI / 180f;
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.ScaleMode = ScaleMode.YByTime;
+            dp.DestoryAt = 4800;
+            dp2.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Danger_Zone2";
+            dp2.Owner = @event.SourceId;
+            dp2.Color = accessory.Data.DefaultDangerColor;
+            dp2.Scale = new Vector2(60);
+            dp2.Radian = 90f * MathF.PI / 180f;
+            dp2.Rotation = MathF.PI;
+            dp2.ScaleMode = ScaleMode.YByTime;
+            dp2.DestoryAt = 4800;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Fan, dp);
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Fan, dp2);
+        }
+        [ScriptMethod(
+            name: "俯冲",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:37819"]
+        )]
+        public void OnFrigidDiveDraw(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_FrigidDive_Danger_Zone";
+            dp.Owner = @event.SourceId;
+            dp.Scale = new Vector2(20, 60);
+            dp.Color = accessory.Data.DefaultDangerColor;
+            dp.ScaleMode = ScaleMode.ByTime;
+            dp.DestoryAt = 8000;
+            accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("俯冲");
+            }
+        }
+        [ScriptMethod(
+            name: "水滩 - 记录",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Add", "DataId:regex:^(2014546|2014547)$"],
+            userControl: false
+        )]
+        public void OnPuddleSpawn(Event @event, ScriptAccessory accessory)
+        {
+            var id = @event.SourceId;
+            var dataId = uint.Parse(@event["DataId"]);
+
+            if (dataId == 2014546)
+            {
+                _puddles[id] = PuddleType.Circle;
+            }
+            else if (dataId == 2014547)
+            {
+                _puddles[id] = PuddleType.Cross;
+            }
+        }
+        [ScriptMethod(
+            name: "水滩 - 移除",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Remove", "DataId:regex:^(2014546|2014547)$"],
+            userControl: false
+        )]
+        public void OnPuddleDespawn(Event @event, ScriptAccessory accessory)
+        {
+            _puddles.TryRemove(@event.SourceId, out _);
+        }
+        [ScriptMethod(
+            name: "水滩(钢铁十字)",
+            eventType: EventTypeEnum.ObjectEffect,
+            eventCondition: ["Id1:16", "Id2:32"]
+        )]
+        public void OnPuddleEffect(Event @event, ScriptAccessory accessory)
+        {
+            var sourceId = @event.SourceId;
+            var source = accessory.Data.Objects.SearchById(sourceId);
+
+            if (source == null ||
+                Vector3.Distance(source.Position, Boss3ArenaCenter) > 30 ||
+                !_puddles.TryGetValue(sourceId, out var type))
+            {
+                return;
+            }
+
+            switch (type)
+            {
+                case PuddleType.Circle:
+                    var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                    dpCircle.Name = DRAW_PREFIX + $"Combat_Puddle_Circle_{sourceId}";
+                    dpCircle.Owner = sourceId;
+                    dpCircle.Scale = new Vector2(20);
+                    dpCircle.Color = accessory.Data.DefaultDangerColor;
+                    dpCircle.ScaleMode = ScaleMode.ByTime;
+                    dpCircle.DestoryAt = 4000;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpCircle);
+                    break;
+
+                case PuddleType.Cross:
+                    var dpCross1 = accessory.Data.GetDefaultDrawProperties();
+                    dpCross1.Name = DRAW_PREFIX + $"Combat_Puddle_Cross1_{sourceId}";
+                    dpCross1.Owner = sourceId;
+                    dpCross1.Scale = new Vector2(16, 120);
+                    dpCross1.Color = accessory.Data.DefaultDangerColor;
+                    dpCross1.ScaleMode = ScaleMode.ByTime;
+                    dpCross1.DestoryAt = 4000;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpCross1);
+
+                    var dpCross2 = accessory.Data.GetDefaultDrawProperties();
+                    dpCross2.Name = DRAW_PREFIX + $"Combat_Puddle_Cross2_{sourceId}";
+                    dpCross2.Owner = sourceId;
+                    dpCross2.Scale = new Vector2(16, 120);
+                    dpCross2.Rotation = MathF.PI / 2;
+                    dpCross2.Color = accessory.Data.DefaultDangerColor;
+                    dpCross2.ScaleMode = ScaleMode.ByTime;
+                    dpCross2.DestoryAt = 4000;
+                    accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpCross2);
+                    break;
+            }
+        }
+        [ScriptMethod(
+            name: "龙态行动预站位(指路)",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(30063|30264)$"]
+        )]
+        public void OnDraconiformMotionGuide(Event @event, ScriptAccessory accessory)
+        {
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = DRAW_PREFIX + "Combat_DraconiformMotion_Guide";
+            dp.Owner = accessory.Data.Me;
+            dp.TargetPosition = new Vector3(-336.98f, -840.00f, 165.53f); // Boss背后
+            dp.Scale = new Vector2(1.5f);
+            dp.ScaleMode |= ScaleMode.YByDistance;
+            dp.Color = accessory.Data.DefaultSafeColor;
+            dp.DestoryAt = 8000;
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("预站位");
+            }
+        }
+        [ScriptMethod(
+            name: "踩冰塔 - 出现(指路)",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Add", "DataId:2014548"]
+        )]
+        public void OnIceTowerSpawn(Event @event, ScriptAccessory accessory)
+        {
+            var tower = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (tower == null) return;
+
+            List<Vector3> teamTowerCoords = new();
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    TowerPositions_ABC123.TryGetValue(MyTeam, out teamTowerCoords);
+                    break;
+                case StrategySelection.Pos_152463:
+                    TowerPositions_123456.TryGetValue(MyPosition, out teamTowerCoords);
+                    break;
+                case StrategySelection.LemonCookie:
+                    TowerPosition_Lemon.TryGetValue(MyLemonCookiePosition, out teamTowerCoords);
+                    break;
+            }
+
+            if (teamTowerCoords != null)
+            {
+                foreach (var coord in teamTowerCoords)
+                {
+                    if (Vector3.DistanceSquared(tower.Position, coord) < 1.0f)
+                    {
+                        var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                        dpCircle.Name = DRAW_PREFIX + $"Combat_IceTower_Circle_{tower.EntityId}";
+                        dpCircle.Position = tower.Position;
+                        dpCircle.Scale = new Vector2(4);
+                        dpCircle.Color = new Vector4(0, 1, 0, 1);
+                        dpCircle.DestoryAt = 22000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
+                        break;
+                    }
+                }
+            }
+        }
+        [ScriptMethod(
+            name: "踩冰塔 - 效果触发(指路)",
+            eventType: EventTypeEnum.ObjectEffect,
+            eventCondition: ["Id1:16", "Id2:32"]
+        )]
+        public void OnIceTowerEffect(Event @event, ScriptAccessory accessory)
+        {
+            var tower = accessory.Data.Objects.SearchById(@event.SourceId);
+
+            if (tower == null || tower.DataId != 2014548) return;
+
+            List<Vector3> teamTowerCoords = null;
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    TowerPositions_ABC123.TryGetValue(MyTeam, out teamTowerCoords);
+                    break;
+                case StrategySelection.Pos_152463:
+                    TowerPositions_123456.TryGetValue(MyPosition, out teamTowerCoords);
+                    break;
+                case StrategySelection.LemonCookie:
+                    TowerPosition_Lemon.TryGetValue(MyLemonCookiePosition, out teamTowerCoords);
+                    break;
+            }
+
+            if (teamTowerCoords != null)
+            {
+                foreach (var coord in teamTowerCoords)
+                {
+                    if (Vector3.DistanceSquared(tower.Position, coord) < 1.0f)
+                    {
+                        var dpGuide = accessory.Data.GetDefaultDrawProperties();
+                        dpGuide.Name = DRAW_PREFIX + $"Combat_IceTower_Guide_{tower.EntityId}";
+                        dpGuide.Owner = accessory.Data.Me;
+                        dpGuide.TargetObject = tower.EntityId;
+                        dpGuide.Scale = new Vector2(1.5f);
+                        dpGuide.ScaleMode |= ScaleMode.YByDistance;
+                        dpGuide.Color = accessory.Data.DefaultSafeColor;
+                        dpGuide.DestoryAt = 4000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+                        break;
+                    }
+                }
+            }
+        }
+        [ScriptMethod(
+            name: "小怪分组(指路)",
+            eventType: EventTypeEnum.AddCombatant,
+            eventCondition: ["DataId:14730"]
+        )]
+        public void OnGroupMarkerSpawn(Event @event, ScriptAccessory accessory)
+        {
+            var marker = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (marker == null) return;
+
+            TeamSelection targetGroup = MyTeam;
+            bool shouldDraw = false;
+
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    shouldDraw = true;
+                    targetGroup = MyTeam;
+                    break;
+
+                case StrategySelection.Pos_152463:
+                    shouldDraw = true;
+                    switch (MyPosition)
+                    {
+                        case PositionSelection.Pos1: targetGroup = TeamSelection.A; break;
+                        case PositionSelection.Pos5: targetGroup = TeamSelection.B; break;
+                        case PositionSelection.Pos2: targetGroup = TeamSelection.C; break;
+                        case PositionSelection.Pos3: targetGroup = TeamSelection.One; break;
+                        case PositionSelection.Pos6: targetGroup = TeamSelection.Two; break;
+                        case PositionSelection.Pos4: targetGroup = TeamSelection.Three; break;
+                    }
+                    break;
+
+                case StrategySelection.LemonCookie:
+                    shouldDraw = true;
+                    // 柠檬松饼分组攻略
+                    // 152463组号到柠檬松饼组号的映射：1->1, 2->3, 3->6, 4->4, 5->2, 6->5
+                    // 这里需要反向映射：柠檬松饼组号 -> 对应的152463位置 -> 对应的TeamSelection
+                    switch (MyLemonCookiePosition)
+                    {
+                        case PositionSelection.Pos1: // 柠檬松饼1组 -> 152463的1组 -> TeamSelection.A
+                            targetGroup = TeamSelection.A;
+                            break;
+                        case PositionSelection.Pos2: // 柠檬松饼2组 -> 152463的5组 -> TeamSelection.B
+                            targetGroup = TeamSelection.B;
+                            break;
+                        case PositionSelection.Pos3: // 柠檬松饼3组 -> 152463的2组 -> TeamSelection.C
+                            targetGroup = TeamSelection.C;
+                            break;
+                        case PositionSelection.Pos4: // 柠檬松饼4组 -> 152463的4组 -> TeamSelection.Three
+                            targetGroup = TeamSelection.Three;
+                            break;
+                        case PositionSelection.Pos5: // 柠檬松饼5组 -> 152463的6组 -> TeamSelection.Two
+                            targetGroup = TeamSelection.Two;
+                            break;
+                        case PositionSelection.Pos6: // 柠檬松饼6组 -> 152463的3组 -> TeamSelection.One
+                            targetGroup = TeamSelection.One;
+                            break;
+                    }
+                    break;
+            }
+
+            if (shouldDraw)
+            {
+                foreach (var groupEntry in GroupMarkerPositions)
+                {
+                    if (Vector3.DistanceSquared(marker.Position, groupEntry.Value) < 1.0f)
+                    {
+                        if (groupEntry.Key == targetGroup)
+                        {
+                            var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                            dpCircle.Name = DRAW_PREFIX + $"Combat_GroupMarker_Circle_{marker.EntityId}";
+                            dpCircle.Owner = marker.EntityId;
+                            dpCircle.Scale = new Vector2(3);
+                            dpCircle.Color = new Vector4(0, 1, 0, 1);
+                            dpCircle.DestoryAt = 4000;
+                            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
+
+                            var dpGuide = accessory.Data.GetDefaultDrawProperties();
+                            dpGuide.Name = DRAW_PREFIX + $"Combat_GroupMarker_Guide_{marker.EntityId}";
+                            dpGuide.Owner = accessory.Data.Me;
+                            dpGuide.TargetObject = marker.EntityId;
+                            dpGuide.Scale = new Vector2(1.5f);
+                            dpGuide.ScaleMode |= ScaleMode.YByDistance;
+                            dpGuide.Color = accessory.Data.DefaultSafeColor;
+                            dpGuide.DestoryAt = 4000;
+                            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        #endregion
+        #region 尾王
+        [ScriptMethod(
+            name: "尾王 - 初始化",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41572"],
+            userControl: false
+        )]
+        public void OnInitializeBoss4Draw(Event @event, ScriptAccessory accessory)
+        {
+            lock (_lifecycleLock)
+            {
+                if (!ResetCombatLifecycle()) return;
+                accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Combat_.*");
+                if (Enable_Developer_Mode) accessory.Log.Debug("尾王初始化完成。");
+                _holyWeaponType = HolyWeaponType.None;
+            }
+        }
+
+        [ScriptMethod(
+            name: "封印解除",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41538|41537)$"]
+        )]
+        public void UnsealAlert(Event @event, ScriptAccessory accessory)
+        {
+            var actionId = @event.ActionId;
+            if (actionId == 41538)
+            {
+                if (EnableTextBanner) accessory.Method.TextInfo("枪，远平A", 5000);
+                if (EnableTTS)
+                {
+                    accessory.Method.TTS("远平A，3下");
+                }
+            }
+            else
+            {
+                if (EnableTextBanner) accessory.Method.TextInfo("斧，近平A", 5000);
+                if (EnableTTS)
+                {
+                    accessory.Method.TTS("近平A，3下");
+                }
+            }
+        }
+        [ScriptMethod(
+            name: "两岐之怒",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41573"]
+        )]
+        public void OnForkedFuryAlert(Event @event, ScriptAccessory accessory)
+        {
+            if (EnableTextBanner) accessory.Method.TextInfo("远近死刑", 5000);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS("远近死刑，然后两下平A");
+            }
+        }
+        [ScriptMethod(
+            name: "暗杀短剑",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41569"]
+        )]
+        public void AssassinsDagger(Event @event, ScriptAccessory accessory)
+        {
+            var caster = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (caster == null) return;
+
+            var directionVector = @event.EffectPosition - caster.Position;
+            var initialAngle = MathF.Atan2(directionVector.X, directionVector.Z);
+            var distance = directionVector.Length();
+            var rotationOffset = -50 * MathF.PI / 180.0f;
+
+            for (int i = 0; i < 6; i++)
+            {
+                var currentAngle = initialAngle + i * rotationOffset;
+                var delay = 1100 + (long)(i * 3900);
+
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + $"Combat_AssassinsDagger_{i}";
+                dp.Position = caster.Position;
+                dp.Scale = new Vector2(6, distance);
+                dp.Rotation = currentAngle;
+                dp.Delay = delay;
+                dp.DestoryAt = 6100;
+                dp.Color = accessory.Data.DefaultDangerColor;
+
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
+            }
+        }
+
+        [ScriptMethod(
+            name: "致命枪斧组合AOE",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:regex:^(41547|41543)$"]
+        )]
+        public void CriticalBlow(Event @event, ScriptAccessory accessory)
+        {
+            var caster = accessory.Data.Objects.SearchById(@event.SourceId);
+            if (caster == null) return;
+
+            bool isLance = @event.ActionId == 41547;
+
+            var mainShapeDuration = isLance ? 6400 : 6100;
+            var squareColor = isLance ? accessory.Data.DefaultDangerColor : new Vector4(0f, 0.6f, 0f, 0.8f);
+
+            if (isLance)
+            {
+                var dpDonut = accessory.Data.GetDefaultDrawProperties();
+                dpDonut.Name = DRAW_PREFIX + "Combat_CriticalLanceblow_Donut";
+                dpDonut.Owner = caster.EntityId;
+                dpDonut.Scale = new Vector2(32);
+                dpDonut.InnerScale = new Vector2(10);
+                dpDonut.Radian = 2f * MathF.PI;
+                dpDonut.Color = accessory.Data.DefaultDangerColor;
+                dpDonut.DestoryAt = mainShapeDuration;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Donut, dpDonut);
+                if (EnableTTS)
+                {
+                    accessory.Method.TTS("月环");
+                }
+            }
+            else
+            {
+                var dpCircle = accessory.Data.GetDefaultDrawProperties();
+                dpCircle.Name = DRAW_PREFIX + "Combat_CriticalAxeblow_Circle";
+                dpCircle.Owner = caster.EntityId;
+                dpCircle.Scale = new Vector2(20);
+                dpCircle.Color = new Vector4(1f, 0f, 0f, 1.5f);
+                dpCircle.DestoryAt = mainShapeDuration;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpCircle);
+                if (EnableTTS)
+                {
+                    accessory.Method.TTS("钢铁");
+                }
+            }
+            for (int i = 0; i < SquarePositions.Count; i++)
+            {
+                var dpSquare = accessory.Data.GetDefaultDrawProperties();
+                dpSquare.Name = DRAW_PREFIX + $"Combat_Square_AOE_{i}";
+                dpSquare.Position = SquarePositions[i];
+                dpSquare.Rotation = SquareAngles[i];
+                dpSquare.Scale = new Vector2(20, 20);
+                dpSquare.Color = squareColor;
+                dpSquare.DestoryAt = mainShapeDuration;
+                accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpSquare);
+            }
+        }
+        [ScriptMethod(
+            name: "大斧猎物 (9秒)",
+            eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:4337"]
+        )]
+        public void GreatAxePrey(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+
+            if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 9.0f) < 0.1f)
+            {
+                var player = accessory.Data.MyObject;
+                if (player == null) return;
+
+                Vector3 closestPos = GreataxePreyPositions[0];
+                float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
+
+                for (int i = 1; i < GreataxePreyPositions.Count; i++)
+                {
+                    float distSq = Vector3.DistanceSquared(player.Position, GreataxePreyPositions[i]);
+                    if (distSq < minDistanceSq)
+                    {
+                        minDistanceSq = distSq;
+                        closestPos = GreataxePreyPositions[i];
+                    }
+                }
+
+                var dp = accessory.Data.GetDefaultDrawProperties();
+                dp.Name = DRAW_PREFIX + "Combat_GreataxePrey_Guide";
+                dp.Owner = player.EntityId;
+                dp.TargetPosition = closestPos;
+                dp.Scale = new Vector2(1.5f);
+                dp.ScaleMode |= ScaleMode.YByDistance;
+                dp.Color = accessory.Data.DefaultSafeColor;
+                dp.DestoryAt = 9000;
+                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+            }
+        }
+        [ScriptMethod(
+            name: "大斧猎物 (21秒)",
+            eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:4337"]
+        )]
+        public void GreatAxePreyLong(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+
+            if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 21.0f) < 0.1f)
+            {
+                ulong targetId = @event.TargetId;
+                ScheduleCombatAction(accessory, 15000, () =>
+                {
+                    try
+                    {
+                        // 延时结束后重新获取对象和位置，避免持有上一轮的游戏对象。
+                        var player = accessory.Data.MyObject;
+                        if (player == null || player.EntityId != targetId || player.IsDead) return;
+                        if (player is not IBattleChara battleChara ||
+                            !battleChara.StatusList.Any(status => status.StatusId == 4337)) return;
+                        Vector3 closestPos = GreataxePreyPositions[0];
+                        float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
+
+                        for (int i = 1; i < GreataxePreyPositions.Count; i++)
+                        {
+                            float distSq = Vector3.DistanceSquared(player.Position, GreataxePreyPositions[i]);
+                            if (distSq < minDistanceSq)
+                            {
+                                minDistanceSq = distSq;
+                                closestPos = GreataxePreyPositions[i];
+                            }
+                        }
+
+                        var dp = accessory.Data.GetDefaultDrawProperties();
+                        dp.Name = DRAW_PREFIX + "Combat_GreataxePrey_Guide";
+                        dp.Owner = player.EntityId;
+                        dp.TargetPosition = closestPos;
+                        dp.Scale = new Vector2(1.5f);
+                        dp.ScaleMode |= ScaleMode.YByDistance;
+                        dp.Color = accessory.Data.DefaultSafeColor;
+                        dp.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+                    }
+                    catch (Exception ex)
+                    {
+                        accessory.Log.Error($"大斧猎物延时指路失败：{ex}");
+                    }
+                });
+            }
+        }
+        [ScriptMethod(
+            name: "小斧猎物",
+            eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:4336"]
+        )]
+        public void LesserAxePrey(Event @event, ScriptAccessory accessory)
+        {
+            if (@event.TargetId != accessory.Data.Me) return;
+            var player = accessory.Data.MyObject;
+            if (player == null) return;
+            if (float.TryParse(@event["Duration"], out var duration))
+            {
+                if (Math.Abs(duration - 13.0f) < 0.1f)
+                {
+                    Vector3 closestPos = SquarePositions[0];
+                    float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
+
+                    for (int i = 1; i < SquarePositions.Count; i++)
+                    {
+                        float distSq = Vector3.DistanceSquared(player.Position, SquarePositions[i]);
+                        if (distSq < minDistanceSq)
+                        {
+                            minDistanceSq = distSq;
+                            closestPos = SquarePositions[i];
+                        }
+                    }
+                    var dp = accessory.Data.GetDefaultDrawProperties();
+                    dp.Name = DRAW_PREFIX + "Combat_LesseraxePrey_Guide";
+                    dp.Owner = player.EntityId;
+                    dp.TargetPosition = closestPos;
+                    dp.Scale = new Vector2(1.5f);
+                    dp.ScaleMode |= ScaleMode.YByDistance;
+                    dp.Color = accessory.Data.DefaultSafeColor;
+                    dp.DestoryAt = 13000;
+                    accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
+
+                }
+                else if (Math.Abs(duration - 21.0f) < 0.1f)
+                {
+                    if (LongPointName)
+                    {
+                        var dp1 = accessory.Data.GetDefaultDrawProperties();
+                        dp1.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_2";
+                        dp1.Owner = player.EntityId;
+                        dp1.TargetPosition = SquarePositions[1];
+                        dp1.Scale = new Vector2(1.5f);
+                        dp1.ScaleMode |= ScaleMode.YByDistance;
+                        dp1.Color = accessory.Data.DefaultSafeColor;
+                        dp1.Delay = 15000;
+                        dp1.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp1);
+                        var dp3 = accessory.Data.GetDefaultDrawProperties();
+                        dp3.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_3";
+                        dp3.Owner = player.EntityId;
+                        dp3.TargetPosition = SquarePositions[2];
+                        dp3.Scale = new Vector2(1.5f);
+                        dp3.ScaleMode |= ScaleMode.YByDistance;
+                        dp3.Color = accessory.Data.DefaultSafeColor;
+                        dp3.Delay = 15000;
+                        dp3.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp3);
+                    }
+                    else
+                    {
+                        var dp1 = accessory.Data.GetDefaultDrawProperties();
+                        dp1.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_2";
+                        dp1.Position = SquarePositions[1];
+                        dp1.Scale = new Vector2(3);
+                        dp1.Color = new Vector4(0, 1, 0, 1);
+                        dp1.Delay = 15000;
+                        dp1.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
+
+                        var dp3 = accessory.Data.GetDefaultDrawProperties();
+                        dp3.Name = DRAW_PREFIX + "Combat_LittleAxePrey_SafeZone_21s_3";
+                        dp3.Position = SquarePositions[2];
+                        dp3.Scale = new Vector2(3);
+                        dp3.Color = new Vector4(0, 1, 0, 1);
+                        dp3.Delay = 15000;
+                        dp3.DestoryAt = 6000;
+                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp3);
+                    }
+                }
+            }
+        }
+        [ScriptMethod(
+            name: "圣枪（指路）",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41557"]
+        )]
+        public void HolyLanceGuide(Event @event, ScriptAccessory accessory)
+        {
+            var path = new List<DisplacementContainer>();
+            // 覆盖逻辑：仅当选择了“左上/右上/下”时，强制使用 A/B/C 的路径块；
+            // 选择 None 时，保持原有 SelectedStrategy 的完整分支，不做任何改动。
+            if (HolyLanceGroupOverride != LanceGuideOverride.None)
+            {
+                TeamSelection forcedTeam = TeamSelection.A;
+                switch (HolyLanceGroupOverride)
+                {
+                    case LanceGuideOverride.左上: forcedTeam = TeamSelection.A; break;
+                    case LanceGuideOverride.右上: forcedTeam = TeamSelection.B; break;
+                    case LanceGuideOverride.下:   forcedTeam = TeamSelection.C; break;
+                }
+
+                switch (forcedTeam)
+                {
+                    case TeamSelection.A:
+                        path.Add(new DisplacementContainer(SquarePositions[2], 0, 10000));
+                        path.Add(new DisplacementContainer(CriticalLanceSafePositions[1], 0, 5000));
+                        path.Add(new DisplacementContainer(SquarePositions[2], 0, 17000));
+                        path.Add(new DisplacementContainer(RectSideInA, 0, 3000));
+                        path.Add(new DisplacementContainer(RectSideOutA, 0, 6000));
+                        break;
+                    case TeamSelection.B:
+                        path.Add(new DisplacementContainer(SquarePositions[1], 0, 10000));
+                        path.Add(new DisplacementContainer(CriticalLanceSafePositions[2], 0, 5000));
+                        path.Add(new DisplacementContainer(RectSideInB, 0, 4000));
+                        path.Add(new DisplacementContainer(RectSideOutB, 0, 6000));
+                        path.Add(new DisplacementContainer(SquarePositions[1], 0, 14000));
+                        break;
+                    case TeamSelection.C:
+                        path.Add(new DisplacementContainer(SquarePositions[0], 0, 10000));
+                        path.Add(new DisplacementContainer(CriticalLanceSafePositions[0], 0, 5000));
+                        path.Add(new DisplacementContainer(SquarePositions[0], 0, 9000));
+                        path.Add(new DisplacementContainer(RectSideInC, 0, 3000));
+                        path.Add(new DisplacementContainer(RectSideOutC, 0, 6000));
+                        path.Add(new DisplacementContainer(SquarePositions[0], 0, 6000));
+                        break;
+                }
+            }
+            else
+            {
+                // 根据分组确定路径
+                switch (SelectedStrategy)
+                {
+                    case StrategySelection.ABC_123:
+                        switch (MyTeam)
+                        {
+                            case TeamSelection.A:
+                            case TeamSelection.One:
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[1], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 17000));
+                                path.Add(new DisplacementContainer(RectSideInA, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutA, 0, 6000));
+                                break;
+                            case TeamSelection.B:
+                            case TeamSelection.Two:
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[2], 0, 5000));
+                                path.Add(new DisplacementContainer(RectSideInB, 0, 4000));
+                                path.Add(new DisplacementContainer(RectSideOutB, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 14000));
+                                break;
+                            case TeamSelection.C:
+                            case TeamSelection.Three:
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[0], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 9000));
+                                path.Add(new DisplacementContainer(RectSideInC, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutC, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 6000));
+                                break;
+                        }
+                        break;
+                    case StrategySelection.Pos_152463:
+                        switch (MyPosition)
+                        {
+                            case PositionSelection.Pos1:
+                            case PositionSelection.Pos2:
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[1], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 17000));
+                                path.Add(new DisplacementContainer(RectSideInA, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutA, 0, 6000));
+                                break;
+                            case PositionSelection.Pos5:
+                            case PositionSelection.Pos6:
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[2], 0, 5000));
+                                path.Add(new DisplacementContainer(RectSideInB, 0, 4000));
+                                path.Add(new DisplacementContainer(RectSideOutB, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 14000));
+                                break;
+                            case PositionSelection.Pos3:
+                            case PositionSelection.Pos4:
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[0], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 9000));
+                                path.Add(new DisplacementContainer(RectSideInC, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutC, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 6000));
+                                break;
+                        }
+                        break;
+                    case StrategySelection.LemonCookie:
+                        switch (MyLemonCookiePosition)
+                        {
+                            case PositionSelection.Pos1:
+                            case PositionSelection.Pos2:
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[1], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[2], 0, 17000));
+                                path.Add(new DisplacementContainer(RectSideInA, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutA, 0, 6000));
+                                break;
+                            case PositionSelection.Pos5:
+                            case PositionSelection.Pos6:
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[2], 0, 5000));
+                                path.Add(new DisplacementContainer(RectSideInB, 0, 4000));
+                                path.Add(new DisplacementContainer(RectSideOutB, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[1], 0, 14000));
+                                break;
+                            case PositionSelection.Pos3:
+                            case PositionSelection.Pos4:
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 10000));
+                                path.Add(new DisplacementContainer(CriticalLanceSafePositions[0], 0, 5000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 9000));
+                                path.Add(new DisplacementContainer(RectSideInC, 0, 3000));
+                                path.Add(new DisplacementContainer(RectSideOutC, 0, 6000));
+                                path.Add(new DisplacementContainer(SquarePositions[0], 0, 6000));
+                                break;
+                        }
+                        break;
+                }
+            }
+
+            if (path.Count > 0)
+            {
+                var props = new MultiDisDrawProp
+                {
+                    Color_GoNow = new Vector4(0, 1, 0, 1),
+                    Color_GoLater = new Vector4(1, 1, 0, 1),
+                    DrawMode = DrawModeEnum.Imgui
+                };
+                accessory.MultiDisDraw(path, props, DRAW_PREFIX + "Combat_");
+                if (Enable_Developer_Mode) accessory.Log.Debug($"圣枪机制：覆盖={HolyLanceGroupOverride}，策略={SelectedStrategy}。");
+            }
+        }
+        [ScriptMethod(
+            name: "神圣 - 记录武器",
+            eventType: EventTypeEnum.StatusAdd,
+            eventCondition: ["StatusID:4339"],
+            userControl: false
+        )]
+        public void OnSealMeltStatus(Event @event, ScriptAccessory accessory)
+        {
+            if (int.TryParse(@event["Param"], out int paramValue))
+            {
+                if (paramValue == 851)
+                {
+                    _holyWeaponType = HolyWeaponType.Axe;
+                    if (Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为斧头。");
+                }
+                else if (paramValue == 852)
+                {
+                    _holyWeaponType = HolyWeaponType.Lance;
+                    if (Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为长枪。");
+                }
+            }
+        }
+
+        [ScriptMethod(
+            name: "灵气爆 - 提示",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41562"],
+            suppress: 2000
+        )]
+        public void OnHallowedPlumeCast(Event @event, ScriptAccessory accessory)
+        {
+            string hintText = "";
+            switch (_holyWeaponType)
+            {
+                case HolyWeaponType.Axe:
+                    hintText = "打黄色罐子";
+                    break;
+                case HolyWeaponType.Lance:
+                    hintText = "打蓝色罐子";
+                    break;
+                default:
+                    accessory.Log.Error("神圣机制：未能获取到武器类型。");
+                    return;
+            }
+            if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS(hintText);
+            }
+
+            _holyWeaponType = HolyWeaponType.None;
+        }
+        [ScriptMethod(
+            name: "神圣 - 提示",
+            eventType: EventTypeEnum.StartCasting,
+            eventCondition: ["ActionId:41563"],
+            suppress: 2000
+        )]
+        public void OnHolyCast(Event @event, ScriptAccessory accessory)
+        {
+            string hintText = "";
+            switch (_holyWeaponType)
+            {
+                case HolyWeaponType.Axe:
+                    hintText = "打黄色罐子";
+                    break;
+                case HolyWeaponType.Lance:
+                    hintText = "打蓝色罐子";
+                    break;
+                default:
+                    accessory.Log.Error("神圣机制：未能获取到武器类型。");
+                    return;
+            }
+            if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
+            if (EnableTTS)
+            {
+                accessory.Method.TTS(hintText);
+            }
+
+            _holyWeaponType = HolyWeaponType.None;
+        }
+        #endregion
+        [ScriptMethod(
+            name: "藏宝图",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Add", "DataId:regex:^(1754|1755)$"]
+        )]
+        public void CheckTreasureChest(Event @event, ScriptAccessory accessory)
+        {
+            if (Enable_Developer_Mode) accessory.Log.Debug("找到箱子");
+            var dp = accessory.Data.GetDefaultDrawProperties();
+            dp.Name = $"{DRAW_PREFIX}Chest_{@event.SourceId:X}";
+            dp.Owner = accessory.Data.Me;
+            dp.TargetObject = @event.SourceId;
+            dp.Color = accessory.Data.DefaultSafeColor;
+            dp.ScaleMode = ScaleMode.YByDistance;
+            dp.Scale = new Vector2(1.5f);
+            dp.DestoryAt = 120000;
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Line, dp);
+        }
+
+        [ScriptMethod(
+            name: "宝箱移除",
+            eventType: EventTypeEnum.ObjectChanged,
+            eventCondition: ["Operate:Remove", "DataId:regex:^(1754|1755)$"],
+            userControl: false
+        )]
+        public void RemoveTreasureChest(Event @event, ScriptAccessory accessory)
+        {
+            accessory.Method.RemoveDraw($"^{DRAW_PREFIX}Chest_{@event.SourceId:X}$");
+        }
+        #region Helper_Functions
+
+        private bool IsTank(IPlayerCharacter player)
+        {
+            if (player?.ClassJob.Value == null) return false;
+            return player.ClassJob.Value.Role == 1;
+        }
+
+        private bool IsHealer(IPlayerCharacter player)
+        {
+            if (player?.ClassJob.Value == null) return false;
+            return player.ClassJob.Value.Role == 4;
+        }
+
+        private bool IsDps(IPlayerCharacter player)
+        {
+            if (player?.ClassJob.Value == null) return false;
+            return !IsTank(player) && !IsHealer(player);
+        }
+        private Vector3 RotatePoint(Vector3 point, Vector3 center, float angleRad)
+        {
+            float s = MathF.Sin(angleRad);
+            float c = MathF.Cos(angleRad);
+
+            point.X -= center.X;
+            point.Z -= center.Z;
+
+            float xnew = point.X * c - point.Z * s;
+            float znew = point.X * s + point.Z * c;
+
+            point.X = xnew + center.X;
+            point.Z = znew + center.Z;
+            return point;
+        }
+        #endregion
+
+    }
+    #region Helper_Classes_And_Methods
+
+    public class DisplacementContainer
+    {
+        public Vector3 Pos;
+        public long Delay;
+        public long DestoryAt;
+
+        public DisplacementContainer(Vector3 pos, long delay, long destoryAt)
+        {
+            Pos = pos;
+            Delay = delay;
+            DestoryAt = destoryAt;
+        }
+    }
+
+    public class MultiDisDrawProp
+    {
+        public Vector4 Color_GoNow;
+        public Vector4 Color_GoLater;
+        public long BaseDelay;
+        public float Width;
+        public float EndCircleRadius;
+        public DrawModeEnum DrawMode;
+
+        public MultiDisDrawProp()
+        {
+            this.Color_GoNow = new(1, 1, 1, 1);
+            this.Color_GoLater = new(0, 1, 1, 1);
+            this.BaseDelay = 0;
+            this.Width = 1.2f;
+            this.EndCircleRadius = 0.65f;
+            this.DrawMode = DrawModeEnum.Default;
+        }
+    }
+
+    public static class HelperExtensions
+    {
+        internal static void MultiDisDraw(this ScriptAccessory accessory, List<DisplacementContainer> list, MultiDisDrawProp prop, string drawPrefix)
+        {
+            long startTimeMillis = prop.BaseDelay;
+            string guid = Guid.NewGuid().ToString();
+            for (int i = 0; i < list.Count; i++)
+            {
+                int count = 0;
+                DisplacementContainer dis = list[i];
+                string name = $"{drawPrefix}MultiDisDraw Part {i} : {guid} / ";
+
+                // go now 直线引导部分
+                DrawPropertiesEdit dp_goNowLine = accessory.Data.GetDefaultDrawProperties();
+                dp_goNowLine.Name = name + count++;
+                dp_goNowLine.Owner = (ulong)accessory.Data.Me;
+                dp_goNowLine.Scale = new(prop.Width);
+                dp_goNowLine.Delay = startTimeMillis;
+                dp_goNowLine.DestoryAt = dis.DestoryAt;
+                dp_goNowLine.ScaleMode |= ScaleMode.YByDistance;
+                dp_goNowLine.TargetPosition = dis.Pos;
+                dp_goNowLine.Color = prop.Color_GoNow;
+                accessory.Method.SendDraw(prop.DrawMode, DrawTypeEnum.Displacement, dp_goNowLine);
+
+                if (prop.EndCircleRadius > 0)
+                {
+                    DrawPropertiesEdit dp_goNowCircle = accessory.Data.GetDefaultDrawProperties();
+                    dp_goNowCircle.Name = name + count++;
+                    dp_goNowCircle.Position = dis.Pos;
+                    dp_goNowCircle.Scale = new(prop.EndCircleRadius);
+                    dp_goNowCircle.Delay = dp_goNowLine.Delay;
+                    dp_goNowCircle.DestoryAt = dp_goNowLine.DestoryAt;
+                    dp_goNowCircle.Color = prop.Color_GoNow;
+                    accessory.Method.SendDraw(prop.DrawMode, DrawTypeEnum.Circle, dp_goNowCircle);
+                }
+
+                if (i < list.Count - 1)
+                {
+                    DrawPropertiesEdit dp_goLaterLine = accessory.Data.GetDefaultDrawProperties();
+                    dp_goLaterLine.Name = name + count++;
+                    dp_goLaterLine.Position = list[i].Pos;
+                    dp_goLaterLine.TargetPosition = list[i + 1].Pos;
+                    dp_goLaterLine.Scale = new(prop.Width);
+                    dp_goLaterLine.ScaleMode |= ScaleMode.YByDistance;
+                    dp_goLaterLine.Delay = dp_goNowLine.Delay;
+                    dp_goLaterLine.DestoryAt = dp_goNowLine.DestoryAt;
+                    dp_goLaterLine.Color = prop.Color_GoLater;
+                    accessory.Method.SendDraw(prop.DrawMode, DrawTypeEnum.Displacement, dp_goLaterLine);
+
+                    if (prop.EndCircleRadius > 0)
+                    {
+                        DrawPropertiesEdit dp_goLaterCircle = accessory.Data.GetDefaultDrawProperties();
+                        dp_goLaterCircle.Name = name + count++;
+                        dp_goLaterCircle.Position = list[i + 1].Pos;
+                        dp_goLaterCircle.Scale = new(prop.EndCircleRadius);
+                        dp_goLaterCircle.Delay = dp_goLaterLine.Delay;
+                        dp_goLaterCircle.DestoryAt = dp_goLaterLine.DestoryAt;
+                        dp_goLaterCircle.Color = prop.Color_GoLater;
+                        accessory.Method.SendDraw(prop.DrawMode, DrawTypeEnum.Circle, dp_goLaterCircle);
+                    }
+                }
+                startTimeMillis += dis.DestoryAt;
+            }
+        }
+    }
+
+    #endregion
+}

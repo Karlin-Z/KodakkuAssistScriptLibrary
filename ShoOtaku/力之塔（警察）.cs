@@ -35,7 +35,6 @@ public class TowerPolice
     [UserSetting("开发者模式（调试日志）")]
     public bool EnableDeveloperMode { get; set; } = false;
 
-    // 辅助职业字典
     private static readonly Dictionary<uint, string> _supportJobStatus = new()
     {
         { 4242, "辅助自由人" },
@@ -52,32 +51,27 @@ public class TowerPolice
         { 4368, "辅助预言师" },
         { 4369, "辅助盗贼" }
     };
-    // 获取玩家的辅助职业
     private string GetSupportJob(IPlayerCharacter player)
     {
         if (player == null) return "无";
         var status = player.StatusList.FirstOrDefault(s => _supportJobStatus.ContainsKey(s.StatusId));
         return status != null ? _supportJobStatus[status.StatusId] : "无";
     }
-    // 用于记录扔钱次数的字典和锁
     private readonly Dictionary<string, Dictionary<string, int>> _moneyThrowCounts = new();
     private readonly object _moneyThrowLock = new();
 
-    // 用于记录蓝药次数的字典和锁
     private readonly Dictionary<string, Dictionary<string, int>> _bluePotionCounts = new();
     private readonly object _bluePotionLock = new();
 
-    // 用于猎物站位检测
     private readonly HashSet<ulong> _checkedPreyPlayers = new();
     private readonly object _preyCheckLock = new();
 
-    // 用于圣枪分摊记录和擦边检查
     private readonly HashSet<ulong> _sacredBowPreyRecordedPlayers = new();
     private readonly object _sacredBowPreyLock = new();
     private readonly Dictionary<int, List<(ulong PlayerId, float Duration)>> _lanceShareAssignments = new();
     private readonly object _lanceShareLock = new();
 
-    // 尾王平台站位位置 (用于猎物位置检测)
+    // 尾王平台坐标，顺序与 SquareAngles 及平台分组规则对应。
     private static readonly List<Vector3> SquarePositions = new()
     {
         new Vector3(100, 0, 60),
@@ -102,7 +96,6 @@ public class TowerPolice
         0                   // 0度
     };
 
-    // 猎物持续时间常量
     private const float PREY_DURATION_9S = 9.0f;
     private const float PREY_DURATION_13S = 13.0f;
     private const float PREY_DURATION_21S = 21.0f;
@@ -112,7 +105,6 @@ public class TowerPolice
     {
         accessory.Method.RemoveDraw(".*");
 
-        // 清理小警察数据
         lock (_moneyThrowLock)
         {
             _moneyThrowCounts.Clear();
@@ -317,7 +309,6 @@ public class TowerPolice
 
             if (float.TryParse(@event["Duration"], out var duration))
             {
-                // 记录分摊数据（用于擦边检查）
                 lock (_lanceShareLock)
                 {
                     bool alreadyRecorded = _lanceShareAssignments.Values.Any(list => list.Any(p => p.PlayerId == player.EntityId));
@@ -329,7 +320,7 @@ public class TowerPolice
                         {
                             if (IsPointInRotatedRect(player.Position, SquarePositions[i], 20, 20, SquareAngles[i]))
                             {
-                                platformIndex = i % 3; // 0=下平台, 1=右上平台, 2=左上平台
+                                platformIndex = i % 3; // 0=下平台，1=右上平台，2=左上平台
                                 break;
                             }
                         }
@@ -358,7 +349,6 @@ public class TowerPolice
 
                 if (PoliceMode)
                 {
-                    // 为播报再次检查平台位置
                     int reportPlatformIndex = -1;
                     for (int i = 0; i < SquarePositions.Count; i++)
                     {
@@ -390,10 +380,9 @@ public class TowerPolice
     )]
     public void SacredBowPrey_CheckOnExpire(Event @event, ScriptAccessory accessory)
     {
-        // 检查buff是否为正常到期
         if (!float.TryParse(@event["Duration"], out var remainingDuration) || remainingDuration > 0.1f)
         {
-            return; // 如果持续时间不为0，说明是提前移除，不检查
+            return;
         }
 
         var player = accessory.Data.Objects.SearchById(@event.TargetId);
@@ -423,13 +412,13 @@ public class TowerPolice
             bool shouldCheck = false;
             switch (initialPlatform)
             {
-                case 0: // 平台1 (下)
+                case 0: // 平台 1（下）
                     if (orderIndex == 0 || orderIndex == 2) shouldCheck = true;
                     break;
-                case 1: // 平台2 (右上)
+                case 1: // 平台 2（右上）
                     if (orderIndex == 1 || orderIndex == 2) shouldCheck = true;
                     break;
-                case 2: // 平台3 (左上)
+                case 2: // 平台 3（左上）
                     if (orderIndex == 0 || orderIndex == 1) shouldCheck = true;
                     break;
             }
@@ -450,14 +439,12 @@ public class TowerPolice
 
     private void CheckPreyPosition(ScriptAccessory accessory, ulong targetId)
     {
-        // 如果已经检查过该玩家，则直接返回
         lock (_preyCheckLock)
         {
             if (_checkedPreyPlayers.Contains(targetId)) return;
             _checkedPreyPlayers.Add(targetId);
         }
 
-        // 这个检查由小警察模式统一控制
         if (!PoliceMode) return;
 
         var player = accessory.Data.Objects.SearchById(targetId);
@@ -533,7 +520,6 @@ public class TowerPolice
             List<int> targetCounts = new();
             if (parts.Length > 1)
             {
-                // 支持多个数字参数，如“复活检查 1 2 3”
                 foreach (var part in parts.Skip(1))
                 {
                     if (int.TryParse(part, out int c))
@@ -542,7 +528,6 @@ public class TowerPolice
             }
             else
             {
-                // 默认检查0~3次
                 targetCounts.AddRange(Enumerable.Range(0, 4));
             }
             var allResurrectionData = new List<Tuple<string, string, string, int>>();
@@ -908,7 +893,7 @@ public class TowerPolice
                     bool isChemist = false;
                     foreach (var status in player.StatusList)
                     {
-                        if (status.StatusId == 4367) // 辅助药剂师
+                        if (status.StatusId == 4367)
                         {
                             isChemist = true;
                             break;

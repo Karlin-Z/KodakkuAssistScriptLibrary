@@ -1,24 +1,17 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Globalization;
-using System.Numerics;
 using System.Linq;
-using System.Runtime.ConstrainedExecution;
+using System.Numerics;
 using System.Threading.Tasks;
-using Dalamud.Interface.ManagedFontAtlas;
 using KodakkuAssist.Data;
-using KodakkuAssist.Module.Draw;
-using KodakkuAssist.Module.GameEvent;
-using KodakkuAssist.Script;
 using KodakkuAssist.Extensions;
-using Newtonsoft.Json;
-using System.Runtime.Intrinsics.Arm;
+using KodakkuAssist.Module.Draw;
+using KodakkuAssist.Module.Draw.Manager;
+using KodakkuAssist.Module.GameEvent;
 using KodakkuAssist.Module.GameEvent.Struct;
 using KodakkuAssist.Module.GameOperate;
-using System.Collections.Concurrent;
-using FFXIVClientStructs.Havok.Animation.Rig;
-using KodakkuAssist.Module.Draw.Manager;
-using Lumina.Excel;
+using KodakkuAssist.Script;
 
 namespace KodakkuAssistXSZYYS
 {
@@ -103,12 +96,9 @@ namespace KodakkuAssistXSZYYS
 
         #endregion
 
-        // 用于老一的状态变量
         private int _turnLeftRightCount = 0;
-        // 用于陨石机制的状态变量
         private bool _hasCometeorStatus = false;
         private ulong _cometeorTargetId = 0;
-        private const uint PortentousCometeorDataId = 2014582;
         private const float ArenaCenterZ = 379f; // 定义老一场地中心Z轴坐标
         private static readonly Vector3 Boss1ArenaCenter = new(700f, -481.01f, 379f);
         private bool? _isCasterInUpperHalf = null;
@@ -119,13 +109,10 @@ namespace KodakkuAssistXSZYYS
         private static readonly Vector3 Pos_Two = new(699.98f, -481.01f, 402.49f);
         private static readonly Vector3 Pos_Three = new(704.49f, -481.01f, 392.60f);
 
-        // 用于老二的状态变量
-        // 分别存储蓝色和红色AOE预告圈的位置
         private readonly object _iceFireLock = new();
         private readonly List<Vector3> _blueCircles = new();
         private readonly List<Vector3> _redCircles = new();
         private int _pairsProcessed = 0;
-        // --- 雪球狂奔机制 ---
         private int _snowballRushCastCount = 0;
         private int _letterGroupRushCount = 0;
         private int _numberGroupRushCount = 0;
@@ -137,7 +124,6 @@ namespace KodakkuAssistXSZYYS
         private static readonly Vector3 InitialPosNumberGroup = new(-809.09f, -876.00f, 365.25f);
         private static readonly Vector3 SnowballArenaCenter = new(-800.00f, -876.00f, 360.00f);
         private ulong _tetherSourceId = 0;
-        // --- 火球/地热机制 ---
         private readonly List<Vector3> _fireballPositions = new();
         // 定义两组火球的固定坐标
         private static readonly List<Vector3> LetterGroupFireballCoords = new()
@@ -152,11 +138,12 @@ namespace KodakkuAssistXSZYYS
             new Vector3(-800.00f, -876.00f, 340.00f),
             new Vector3(-782.68f, -876.00f, 370.00f)
         };
-        //老三
         private static readonly Vector3 Boss3ArenaCenter = new(-337.00f, -840.00f, 157.00f); // Boss3场地中心位置
-        // 用于区分水滩类型的枚举
-        private enum PuddleType { Circle, Cross }
-        // 用于存储场上水滩的字典 (Key: 实体ID, Value: 类型)
+        private enum PuddleType
+        {
+            Circle,
+            Cross
+        }
         private readonly ConcurrentDictionary<ulong, PuddleType> _puddles = new();
         // 冰塔分组坐标
         private static readonly Dictionary<TeamSelection, List<Vector3>> TowerPositions_ABC123 = new()
@@ -197,7 +184,6 @@ namespace KodakkuAssistXSZYYS
             { TeamSelection.Two, new Vector3(-337.00f, -840.00f, 172.00f) },
             { TeamSelection.Three, new Vector3(-347.50f, -840.00f, 167.50f) }
         };
-        //尾王
         // 方形AOE的固定坐标和角度
         private static readonly List<Vector3> SquarePositions = new()
         {
@@ -239,19 +225,20 @@ namespace KodakkuAssistXSZYYS
         private static readonly Vector3 RectSideOutB = new(724.71f, -476.00f, -680.50f);
         private static readonly Vector3 RectSideInC = new(695.61f, -476.00f, -653.43f);
         private static readonly Vector3 RectSideOutC = new(694.24f, -476.00f, -648.11f);
-        // 用于神圣机制的状态变量
-        private enum HolyWeaponType { None, Axe, Lance }
+        private enum HolyWeaponType
+        {
+            None,
+            Axe,
+            Lance
+        }
         private HolyWeaponType _holyWeaponType = HolyWeaponType.None;
-        // 用于记录已检查过猎物点名的玩家
         private readonly HashSet<ulong> _checkedPreyPlayers = new();
         private readonly object _preyCheckLock = new();
         private readonly HashSet<ulong> _sacredBowPreyRecordedPlayers = new();
         private readonly object _sacredBowPreyLock = new();
-        // 用于记录枪分摊玩家及其debuff持续时间的字典
         private readonly Dictionary<int, List<(ulong PlayerId, float Duration)>> _lanceShareAssignments = new();
         private readonly object _lanceShareLock = new();
 
-        //辅助职业字典
         private static readonly Dictionary<uint, string> _supportJobStatus = new()
         {
             { 4242, "辅助自由人" },
@@ -268,13 +255,10 @@ namespace KodakkuAssistXSZYYS
             { 4368, "辅助预言师" },
             { 4369, "辅助盗贼" }
         };
-        // 用于记录扔钱次数的字典和锁
         private readonly Dictionary<string, Dictionary<string, int>> _moneyThrowCounts = new();
         private readonly object _moneyThrowLock = new();
-        // 用于记录蓝药次数的字典和锁
         private readonly Dictionary<string, Dictionary<string, int>> _bluePotionCounts = new();
         private readonly object _bluePotionLock = new();
-
 
         public void Init(ScriptAccessory accessory)
         {
@@ -282,45 +266,38 @@ namespace KodakkuAssistXSZYYS
             accessory.Method.RemoveDraw(".*");
 
             _turnLeftRightCount = 0;
-            // 初始化陨石机制状态
             _hasCometeorStatus = false;
             _cometeorTargetId = 0;
             _isCasterInUpperHalf = null;
-            // 冰火
             _blueCircles.Clear();
             _redCircles.Clear();
             _pairsProcessed = 0;
-            // 雪球狂奔
             _snowballRushCastCount = 0;
             _letterGroupRushCount = 0;
             _numberGroupRushCount = 0;
             _letterGroupNextPos = null;
             _numberGroupNextPos = null;
             _tetherSourceId = 0;
-            // 火球/地热
             _fireballPositions.Clear();
-            // 老三水滩
             _puddles.Clear();
-            // 尾王
             _holyWeaponType = HolyWeaponType.None;
-            lock(_sacredBowPreyLock)
+            lock (_sacredBowPreyLock)
             {
-                _sacredBowPreyRecordedPlayers.Clear(); // 重置圣枪记录
+                _sacredBowPreyRecordedPlayers.Clear();
             }
-            lock(_preyCheckLock)
+            lock (_preyCheckLock)
             {
-                _checkedPreyPlayers.Clear(); // 重置已检查列表
+                _checkedPreyPlayers.Clear();
             }
-            lock(_lanceShareLock)
+            lock (_lanceShareLock)
             {
-                _lanceShareAssignments.Clear(); // 重置枪分摊记录
+                _lanceShareAssignments.Clear();
             }
-            // 小警察
-            lock(_moneyThrowLock)
+            lock (_moneyThrowLock)
             {
                 _moneyThrowCounts.Clear();
             }
-            lock(_bluePotionLock)
+            lock (_bluePotionLock)
             {
                 _bluePotionCounts.Clear();
             }
@@ -335,17 +312,13 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss1Draw(Event @event, ScriptAccessory accessory)
         {
-            // 初始化老一的状态
             _hasCometeorStatus = false;
             _cometeorTargetId = 0;
             _isCasterInUpperHalf = null;
             _turnLeftRightCount = 0;
-            // 清除之前的绘制
             accessory.Method.RemoveDraw(".*");
             accessory.Log.Debug("老一初始化完成。");
         }
-
-
 
         [ScriptMethod(
             name: "降落（绘制）",
@@ -360,19 +333,19 @@ namespace KodakkuAssistXSZYYS
             dp.Owner = @event.SourceId;
             switch (ActionId)
             {
-                case 41812: //降落
+                case 41812:
                     dp.Scale = new Vector2(30, 6);
                     dp.Color = accessory.Data.DefaultDangerColor;
                     dp.DestoryAt = 10500;
                     accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dp);
                     break;
-                case 43293: //降落
+                case 43293:
                     dp.Scale = new Vector2(30, 15);
                     dp.Color = accessory.Data.DefaultDangerColor;
                     dp.DestoryAt = 10500;
                     accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
                     break;
-                case 41709: //降落
+                case 41709:
                     dp.Scale = new Vector2(18);
                     dp.Color = accessory.Data.DefaultDangerColor;
                     dp.Delay = 8000;
@@ -423,7 +396,7 @@ namespace KodakkuAssistXSZYYS
             dp.Color = accessory.Data.DefaultSafeColor;
             dp.DestoryAt = 10500;
             accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Rect, dp);
-            if(EnableTextBanner) accessory.Method.TextInfo("击退", 5000);
+            if (EnableTextBanner) accessory.Method.TextInfo("击退", 5000);
         }
 
         [ScriptMethod(
@@ -434,9 +407,8 @@ namespace KodakkuAssistXSZYYS
         )]
         public void GroupPositionGuide(Event @event, ScriptAccessory accessory)
         {
-            Vector3 targetPosition = new Vector3(); // Default value
+            Vector3 targetPosition = new Vector3();
 
-            // 根据用户设置选择目标坐标
             switch (SelectedStrategy)
             {
                 case StrategySelection.ABC_123:
@@ -489,7 +461,6 @@ namespace KodakkuAssistXSZYYS
                     break;
             }
 
-            // 绘制指向目标位置的箭头
             var dp = accessory.Data.GetDefaultDrawProperties();
             var dp2 = accessory.Data.GetDefaultDrawProperties();
             dp.Name = $"Group_Position_Guide_{MyTeam}";
@@ -499,12 +470,12 @@ namespace KodakkuAssistXSZYYS
             dp.ScaleMode |= ScaleMode.YByDistance;
             dp.Color = accessory.Data.DefaultSafeColor;
             dp.DestoryAt = 15000;
-            dp2.Color = new Vector4(0, 1, 0, 0.6f); // 绿色
+            dp2.Color = new Vector4(0, 1, 0, 0.6f);
             dp2.Scale = new Vector2(4);
             dp2.DestoryAt = 15000;
             dp2.Position = targetPosition;
             accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
-            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp2 );
+            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp2);
 
             if (Enable_Developer_Mode)
             {
@@ -555,7 +526,7 @@ namespace KodakkuAssistXSZYYS
                 var dpNorth = accessory.Data.GetDefaultDrawProperties();
                 dpNorth.Name = $"TurnLeftRight_North_Danger_Zone_{_turnLeftRightCount}";
                 dpNorth.Position = Boss1ArenaCenter;
-                dpNorth.Rotation = MathF.PI; // 指向北
+                dpNorth.Rotation = MathF.PI;
                 dpNorth.Scale = new Vector2(30, 33);
                 dpNorth.Color = accessory.Data.DefaultDangerColor;
                 dpNorth.DestoryAt = 8800;
@@ -566,7 +537,7 @@ namespace KodakkuAssistXSZYYS
                 var dpSouth = accessory.Data.GetDefaultDrawProperties();
                 dpSouth.Name = "TurnLeftRight_South_Danger_Zone";
                 dpSouth.Position = Boss1ArenaCenter;
-                dpSouth.Rotation = 0; // 指向南
+                dpSouth.Rotation = 0;
                 dpSouth.Scale = new Vector2(30, 33);
                 dpSouth.Color = accessory.Data.DefaultDangerColor;
                 dpSouth.DestoryAt = 8800;
@@ -684,7 +655,6 @@ namespace KodakkuAssistXSZYYS
         }
         private void TryDrawCometeorGuide(ScriptAccessory accessory)
         {
-            // 只有当玩家有状态且目标存在时，才绘制
             if (_hasCometeorStatus && _cometeorTargetId != 0)
             {
                 if (Enable_Developer_Mode) accessory.Log.Debug("陨石机制：条件满足，开始绘制指路。");
@@ -708,7 +678,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnCometeorActionEffect(Event @event, ScriptAccessory accessory)
         {
-            // 初始化陨石机制状态
             _hasCometeorStatus = false;
             _cometeorTargetId = 0;
         }
@@ -731,7 +700,7 @@ namespace KodakkuAssistXSZYYS
                     {
                         targetPosition = letterGroupPos;
                     }
-                    else // One, Two, Three
+                    else
                     {
                         targetPosition = numberGroupPos;
                     }
@@ -768,7 +737,6 @@ namespace KodakkuAssistXSZYYS
                     break;
             }
 
-            // 绘制指路
             var dp = accessory.Data.GetDefaultDrawProperties();
             dp.Name = "Summon_Guide";
             dp.Owner = accessory.Data.Me;
@@ -887,7 +855,7 @@ namespace KodakkuAssistXSZYYS
                 dpCircle.Name = $"Floating_Tower_Guide_Circle";
                 dpCircle.Position = targetPosition;
                 dpCircle.Scale = new Vector2(4);
-                dpCircle.Color = new Vector4(0, 1, 0, 0.6f); // 绿色
+                dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
                 dpCircle.DestoryAt = 7000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
             }
@@ -967,7 +935,7 @@ namespace KodakkuAssistXSZYYS
                 dpCircle.Name = $"Ground_Tower_Guide_Circle";
                 dpCircle.Position = targetPosition;
                 dpCircle.Scale = new Vector2(4);
-                dpCircle.Color = new Vector4(0, 1, 0, 0.6f); // 绿色
+                dpCircle.Color = new Vector4(0, 1, 0, 0.6f);
                 dpCircle.DestoryAt = 21000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
             }
@@ -1031,21 +999,18 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss2Draw(Event @event, ScriptAccessory accessory)
         {
-            // 初始化老二的状态
             _blueCircles.Clear();
             _redCircles.Clear();
             _pairsProcessed = 0;
-            // 雪球狂奔
             _snowballRushCastCount = 0;
             _letterGroupRushCount = 0;
             _numberGroupRushCount = 0;
             _letterGroupNextPos = null;
             _numberGroupNextPos = null;
             _tetherSourceId = 0;
-            // 火球/地热
             _fireballPositions.Clear();
             accessory.Method.RemoveDraw(".*");
-            if(Enable_Developer_Mode) accessory.Log.Debug("老二初始化完成。");
+            if (Enable_Developer_Mode) accessory.Log.Debug("老二初始化完成。");
         }
 
         [ScriptMethod(
@@ -1090,7 +1055,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void PrimordialChaosTelegraph(Event @event, ScriptAccessory accessory)
         {
-            // 使用锁来确保线程安全
             lock (_iceFireLock)
             {
                 bool isBlue = @event.ActionId == 42464;
@@ -1128,7 +1092,7 @@ namespace KodakkuAssistXSZYYS
                 int triggerTime = _pairsProcessed * 2500;
                 // 计算绘图需要延迟的时间
                 int delay = (explosionTime - displayDuration) - triggerTime;
-                if (delay < 0) delay = 0; // 确保延迟不是负数
+                if (delay < 0) delay = 0;
                 var dpBlue = accessory.Data.GetDefaultDrawProperties();
                 dpBlue.Name = $"PrimordialChaos_Blue_{_pairsProcessed}";
                 dpBlue.Position = bluePos;
@@ -1138,7 +1102,6 @@ namespace KodakkuAssistXSZYYS
                 dpBlue.DestoryAt = displayDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpBlue);
 
-                // 绘制红色圈
                 var dpRed = accessory.Data.GetDefaultDrawProperties();
                 dpRed.Name = $"PrimordialChaos_Red_{_pairsProcessed}";
                 dpRed.Position = redPos;
@@ -1148,7 +1111,7 @@ namespace KodakkuAssistXSZYYS
                 dpRed.DestoryAt = displayDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpRed);
 
-                if(Enable_Developer_Mode) accessory.Log.Debug($"绘制第 {_pairsProcessed + 1} 对冰火圈");
+                if (Enable_Developer_Mode) accessory.Log.Debug($"绘制第 {_pairsProcessed + 1} 对冰火圈");
 
                 // 从列表中移除已处理的圈，并增加计数器
                 _blueCircles.RemoveAt(0);
@@ -1180,14 +1143,14 @@ namespace KodakkuAssistXSZYYS
                         isLetterGroup = true;
                         _letterGroupNextPos = nextPos;
                         currentGroupRushCount = _letterGroupRushCount++;
-                        if(Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组已确定。");
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组已确定。");
                     }
                     else
                     {
                         isLetterGroup = false;
                         _numberGroupNextPos = nextPos;
                         currentGroupRushCount = _numberGroupRushCount++;
-                        if(Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组已确定。");
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组已确定。");
                     }
                 }
                 // 后续读条，用于追踪路径
@@ -1198,19 +1161,19 @@ namespace KodakkuAssistXSZYYS
                         isLetterGroup = true;
                         _letterGroupNextPos = nextPos;
                         currentGroupRushCount = _letterGroupRushCount++;
-                        if(Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组路径更新。");
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 字母组路径更新。");
                     }
                     else if (_numberGroupNextPos.HasValue && Vector3.DistanceSquared(sourcePos, _numberGroupNextPos.Value) < 1.0f)
                     {
                         isLetterGroup = false;
                         _numberGroupNextPos = nextPos;
                         currentGroupRushCount = _numberGroupRushCount++;
-                        if(Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组路径更新。");
+                        if (Enable_Developer_Mode) accessory.Log.Debug("雪球狂奔: 数字组路径更新。");
                     }
                     else
                     {
                         // Fallback in case something goes wrong
-                        if(Enable_Developer_Mode) accessory.Log.Error("雪球狂奔: 无法匹配到路径。");
+                        if (Enable_Developer_Mode) accessory.Log.Error("雪球狂奔: 无法匹配到路径。");
                         return;
                     }
                 }
@@ -1285,14 +1248,13 @@ namespace KodakkuAssistXSZYYS
 
                 var color = isSafe ? accessory.Data.DefaultSafeColor : accessory.Data.DefaultDangerColor;
 
-                // 绘制矩形AOE
                 var dp = accessory.Data.GetDefaultDrawProperties();
                 dp.Name = $"SnowballRush_{_snowballRushCastCount}";
                 dp.Position = sourcePos;
                 dp.TargetPosition = nextPos;
-                dp.Scale = new Vector2(10); // 宽度为10
+                dp.Scale = new Vector2(10);
                 dp.ScaleMode |= ScaleMode.YByDistance;
-                dp.Color = color; // 使用计算出的颜色
+                dp.Color = color;
                 dp.DestoryAt = 7000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Rect, dp);
 
@@ -1318,7 +1280,7 @@ namespace KodakkuAssistXSZYYS
             if (@event.TargetId == accessory.Data.Me)
             {
                 _tetherSourceId = @event.SourceId;
-                if(Enable_Developer_Mode) accessory.Log.Debug($"凝冰冲击: 玩家被连线，来源ID: {_tetherSourceId}");
+                if (Enable_Developer_Mode) accessory.Log.Debug($"凝冰冲击: 玩家被连线，来源ID: {_tetherSourceId}");
             }
         }
         [ScriptMethod(
@@ -1329,11 +1291,9 @@ namespace KodakkuAssistXSZYYS
         public async void GlacialImpact(Event @event, ScriptAccessory accessory)
         {
             await Task.Delay(1000);
-            if(Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 开始读条，触发指路绘制。");
+            if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 开始读条，触发指路绘制。");
             DrawGlacialImpactGuide(accessory);
         }
-
-
 
         private void DrawGlacialImpactGuide(ScriptAccessory accessory)
         {
@@ -1348,11 +1308,11 @@ namespace KodakkuAssistXSZYYS
                 {
                     var direction = Vector3.Normalize(SnowballArenaCenter - tetherSource.Position);
                     safePosition = SnowballArenaCenter + direction * 5;
-                    if(Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 检测到连线，计算特殊安全点。");
+                    if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 检测到连线，计算特殊安全点。");
                 }
                 else
                 {
-                    if(Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到连线来源单位。");
+                    if (Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到连线来源单位。");
                 }
             }
             else // 如果没有被连线，则执行分组逻辑
@@ -1381,7 +1341,7 @@ namespace KodakkuAssistXSZYYS
                 }
                 else
                 {
-                    if(Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到雪球最终落点。");
+                    if (Enable_Developer_Mode) accessory.Log.Error("凝冰冲击: 找不到雪球最终落点。");
                 }
             }
 
@@ -1408,12 +1368,10 @@ namespace KodakkuAssistXSZYYS
         )]
         public void GlacialImpactEnd(Event @event, ScriptAccessory accessory)
         {
-            // 机制结束后重置连线状态
             _tetherSourceId = 0;
-            if(Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 机制结束，重置连线状态。");
+            if (Enable_Developer_Mode) accessory.Log.Debug("凝冰冲击: 机制结束，重置连线状态。");
         }
 
-        //火球塔DataId=2014637
 
         [ScriptMethod(
             name: "火球预站位(指路)",
@@ -1422,7 +1380,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void FireballPrePosition(Event @event, ScriptAccessory accessory)
         {
-            // 使用锁来确保线程安全
             lock (_fireballLock)
             {
                 _fireballPositions.Clear();
@@ -1434,11 +1391,9 @@ namespace KodakkuAssistXSZYYS
                     _fireballPositions.Add(fireball.Position);
                 }
 
-                // 根据新记录的位置列表绘制指引
                 ProcessFireballs(accessory);
             }
         }
-
 
         [ScriptMethod(
             name: "火球安全点重绘(指路)",
@@ -1448,10 +1403,9 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RedrawFireballGuides(Event @event, ScriptAccessory accessory)
         {
-            // 使用第一次事件中储存的位置信息进行重绘
             if (!_fireballPositions.Any())
             {
-                if(Enable_Developer_Mode) accessory.Log.Error("火球重绘: 找不到第一轮的火球坐标。");
+                if (Enable_Developer_Mode) accessory.Log.Error("火球重绘: 找不到第一轮的火球坐标。");
                 return;
             }
             ProcessFireballs(accessory);
@@ -1499,7 +1453,7 @@ namespace KodakkuAssistXSZYYS
                 dp.Name = $"Fireball_DPS_SafeZone_{uniqueId}";
                 dp.Position = safePos;
                 dp.Scale = new Vector2(1);
-                dp.Color = new Vector4(0, 1, 0, 0.6f); // Green
+                dp.Color = new Vector4(0, 1, 0, 0.6f);
                 dp.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp);
                 dp2.Name = "Guide_to_safepos";
@@ -1522,7 +1476,7 @@ namespace KodakkuAssistXSZYYS
                 dp1.Name = $"Fireball_Healer_SafeZone1_{uniqueId}";
                 dp1.Position = safePos2;
                 dp1.Scale = new Vector2(1);
-                dp1.Color = new Vector4(0, 1, 0, 0.6f); // Green
+                dp1.Color = new Vector4(0, 1, 0, 0.6f);
                 dp1.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
@@ -1534,15 +1488,6 @@ namespace KodakkuAssistXSZYYS
                 dp2.ScaleMode |= ScaleMode.YByDistance;
                 dp2.TargetPosition = safePos2;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp2);
-                /*
-                var dp2 = accessory.Data.GetDefaultDrawProperties();
-                dp2.Name = $"Fireball_Healer_SafeZone2_{fireball.EntityId}";
-                dp2.Position = safePos2;
-                dp2.Scale = new Vector2(1);
-                dp2.Color = new Vector4(0, 1, 0, 0.6f); // Green
-                dp2.DestoryAt = 35000;
-                accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp2);
-                */
 
             }
             else if (IsTank(player))
@@ -1556,7 +1501,7 @@ namespace KodakkuAssistXSZYYS
                 dp.Rotation = rotation;
                 dp.Scale = new Vector2(5);
                 dp.Radian = 15 * MathF.PI / 180.0f;
-                dp.Color = new Vector4(0, 1, 0, 0.6f); // Green
+                dp.Color = new Vector4(0, 1, 0, 0.6f);
                 dp.DestoryAt = 10000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Fan, dp);
                 var dp2 = accessory.Data.GetDefaultDrawProperties();
@@ -1579,7 +1524,7 @@ namespace KodakkuAssistXSZYYS
         {
             if (_fireballPositions.Count == 0)
             {
-                if(Enable_Developer_Mode) accessory.Log.Error("地热破裂: 未能获取到火球位置信息。");
+                if (Enable_Developer_Mode) accessory.Log.Error("地热破裂: 未能获取到火球位置信息。");
                 return;
             }
 
@@ -1638,10 +1583,6 @@ namespace KodakkuAssistXSZYYS
                 dp3.DestoryAt = 3000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp3);
 
-
-
-
-
                 pathIndex++;
             }
         }
@@ -1656,10 +1597,9 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss3Draw(Event @event, ScriptAccessory accessory)
         {
-            // 初始化老三的状态
 
             accessory.Method.RemoveDraw(".*");
-            if(Enable_Developer_Mode) accessory.Log.Debug("老三初始化完成。");
+            if (Enable_Developer_Mode) accessory.Log.Debug("老三初始化完成。");
             _puddles.Clear();
         }
         [ScriptMethod(
@@ -1749,7 +1689,6 @@ namespace KodakkuAssistXSZYYS
             var sourceId = @event.SourceId;
             var source = accessory.Data.Objects.SearchById(sourceId);
 
-            // 检查单位是否存在，是否在场地内，以及是否是我们记录的水滩
             if (source == null ||
                 Vector3.Distance(source.Position, Boss3ArenaCenter) > 30 ||
                 !_puddles.TryGetValue(sourceId, out var type))
@@ -1771,7 +1710,6 @@ namespace KodakkuAssistXSZYYS
                     break;
 
                 case PuddleType.Cross:
-                    // 绘制第一条直线
                     var dpCross1 = accessory.Data.GetDefaultDrawProperties();
                     dpCross1.Name = $"Puddle_Cross1_{sourceId}";
                     dpCross1.Owner = sourceId;
@@ -1781,12 +1719,11 @@ namespace KodakkuAssistXSZYYS
                     dpCross1.DestoryAt = 4000;
                     accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpCross1);
 
-                    // 绘制第二条垂直的直线
                     var dpCross2 = accessory.Data.GetDefaultDrawProperties();
                     dpCross2.Name = $"Puddle_Cross2_{sourceId}";
                     dpCross2.Owner = sourceId;
                     dpCross2.Scale = new Vector2(16, 120);
-                    dpCross2.Rotation = MathF.PI / 2; // 旋转90度
+                    dpCross2.Rotation = MathF.PI / 2;
                     dpCross2.Color = accessory.Data.DefaultDangerColor;
                     dpCross2.ScaleMode = ScaleMode.ByTime;
                     dpCross2.DestoryAt = 4000;
@@ -1799,10 +1736,8 @@ namespace KodakkuAssistXSZYYS
             eventType: EventTypeEnum.StartCasting,
             eventCondition: ["ActionId:regex:^(30063|30264)$"]
         )]
-        //{-336.98, -840.00, 165.53}
         public void OnDraconiformMotionGuide(Event @event, ScriptAccessory accessory)
         {
-            // 绘制指路
             var dp = accessory.Data.GetDefaultDrawProperties();
             dp.Name = "DraconiformMotion_Guide";
             dp.Owner = accessory.Data.Me;
@@ -1843,20 +1778,17 @@ namespace KodakkuAssistXSZYYS
 
             if (teamTowerCoords != null)
             {
-                // 检查出现的塔是否是自己队伍的塔
                 foreach (var coord in teamTowerCoords)
                 {
                     if (Vector3.DistanceSquared(tower.Position, coord) < 1.0f)
                     {
-                        // 是自己的塔，进行绘制
                         var dpCircle = accessory.Data.GetDefaultDrawProperties();
                         dpCircle.Name = $"IceTower_Circle_{tower.EntityId}";
                         dpCircle.Position = tower.Position;
                         dpCircle.Scale = new Vector2(4);
-                        dpCircle.Color = new Vector4(0, 1, 0, 1); // Green
+                        dpCircle.Color = new Vector4(0, 1, 0, 1);
                         dpCircle.DestoryAt = 22000;
                         accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dpCircle);
-                        // 找到后即可退出循环
                         break;
                     }
                 }
@@ -1917,59 +1849,57 @@ namespace KodakkuAssistXSZYYS
             var marker = accessory.Data.Objects.SearchById(@event.SourceId);
             if (marker == null) return;
 
-            TeamSelection targetGroup = MyTeam; // Default for ABC_123
+            TeamSelection targetGroup = MyTeam;
             bool shouldDraw = false;
 
+            switch (SelectedStrategy)
+            {
+                case StrategySelection.ABC_123:
+                    shouldDraw = true;
+                    targetGroup = MyTeam;
+                    break;
 
-        switch (SelectedStrategy)
-        {
-            case StrategySelection.ABC_123:
-                shouldDraw = true;
-                targetGroup = MyTeam;
-                break;
+                case StrategySelection.Pos_152463:
+                    shouldDraw = true;
+                    switch (MyPosition)
+                    {
+                        case PositionSelection.Pos1: targetGroup = TeamSelection.A; break;
+                        case PositionSelection.Pos5: targetGroup = TeamSelection.B; break;
+                        case PositionSelection.Pos2: targetGroup = TeamSelection.C; break;
+                        case PositionSelection.Pos3: targetGroup = TeamSelection.One; break;
+                        case PositionSelection.Pos6: targetGroup = TeamSelection.Two; break;
+                        case PositionSelection.Pos4: targetGroup = TeamSelection.Three; break;
+                    }
+                    break;
 
-            case StrategySelection.Pos_152463:
-                shouldDraw = true;
-                switch (MyPosition)
-                {
-                    case PositionSelection.Pos1: targetGroup = TeamSelection.A; break;
-                    case PositionSelection.Pos5: targetGroup = TeamSelection.B; break;
-                    case PositionSelection.Pos2: targetGroup = TeamSelection.C; break;
-                    case PositionSelection.Pos3: targetGroup = TeamSelection.One; break;
-                    case PositionSelection.Pos6: targetGroup = TeamSelection.Two; break;
-                    case PositionSelection.Pos4: targetGroup = TeamSelection.Three; break;
-                }
-                break;
-
-            case StrategySelection.LemonCookie:
-                shouldDraw = true;
-                // 柠檬松饼分组攻略
-                // 152463组号到柠檬松饼组号的映射：1->1, 2->3, 3->6, 4->4, 5->2, 6->5
-                // 这里需要反向映射：柠檬松饼组号 -> 对应的152463位置 -> 对应的TeamSelection
-                switch (MyLemonCookiePosition)
-                {
-                    case PositionSelection.Pos1: // 柠檬松饼1组 -> 152463的1组 -> TeamSelection.A
-                        targetGroup = TeamSelection.A;
-                        break;
-                    case PositionSelection.Pos2: // 柠檬松饼2组 -> 152463的5组 -> TeamSelection.B
-                        targetGroup = TeamSelection.B;
-                        break;
-                    case PositionSelection.Pos3: // 柠檬松饼3组 -> 152463的2组 -> TeamSelection.C
-                        targetGroup = TeamSelection.C;
-                        break;
-                    case PositionSelection.Pos4: // 柠檬松饼4组 -> 152463的4组 -> TeamSelection.Three
-                        targetGroup = TeamSelection.Three;
-                        break;
-                    case PositionSelection.Pos5: // 柠檬松饼5组 -> 152463的6组 -> TeamSelection.Two
-                        targetGroup = TeamSelection.Two;
-                        break;
-                    case PositionSelection.Pos6: // 柠檬松饼6组 -> 152463的3组 -> TeamSelection.One
-                        targetGroup = TeamSelection.One;
-                        break;
-                }
-                break;
-        }
-
+                case StrategySelection.LemonCookie:
+                    shouldDraw = true;
+                    // 柠檬松饼分组攻略
+                    // 152463组号到柠檬松饼组号的映射：1->1, 2->3, 3->6, 4->4, 5->2, 6->5
+                    // 这里需要反向映射：柠檬松饼组号 -> 对应的152463位置 -> 对应的TeamSelection
+                    switch (MyLemonCookiePosition)
+                    {
+                        case PositionSelection.Pos1: // 柠檬松饼1组 -> 152463的1组 -> TeamSelection.A
+                            targetGroup = TeamSelection.A;
+                            break;
+                        case PositionSelection.Pos2: // 柠檬松饼2组 -> 152463的5组 -> TeamSelection.B
+                            targetGroup = TeamSelection.B;
+                            break;
+                        case PositionSelection.Pos3: // 柠檬松饼3组 -> 152463的2组 -> TeamSelection.C
+                            targetGroup = TeamSelection.C;
+                            break;
+                        case PositionSelection.Pos4: // 柠檬松饼4组 -> 152463的4组 -> TeamSelection.Three
+                            targetGroup = TeamSelection.Three;
+                            break;
+                        case PositionSelection.Pos5: // 柠檬松饼5组 -> 152463的6组 -> TeamSelection.Two
+                            targetGroup = TeamSelection.Two;
+                            break;
+                        case PositionSelection.Pos6: // 柠檬松饼6组 -> 152463的3组 -> TeamSelection.One
+                            targetGroup = TeamSelection.One;
+                            break;
+                    }
+                    break;
+            }
 
             if (shouldDraw)
             {
@@ -2012,17 +1942,16 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnInitializeBoss4Draw(Event @event, ScriptAccessory accessory)
         {
-            // 初始化尾王的状态
             accessory.Method.RemoveDraw(".*");
-            if(Enable_Developer_Mode) accessory.Log.Debug("尾王初始化完成。");
+            if (Enable_Developer_Mode) accessory.Log.Debug("尾王初始化完成。");
             _holyWeaponType = HolyWeaponType.None;
-            lock(_preyCheckLock)
+            lock (_preyCheckLock)
             {
-                _checkedPreyPlayers.Clear(); // 重置已检查列表
+                _checkedPreyPlayers.Clear();
             }
-            lock(_lanceShareLock)
+            lock (_lanceShareLock)
             {
-                _lanceShareAssignments.Clear(); // 重置枪分摊记录
+                _lanceShareAssignments.Clear();
             }
             _sacredBowPreyRecordedPlayers.Clear();
         }
@@ -2035,9 +1964,9 @@ namespace KodakkuAssistXSZYYS
         public void UnsealAlert(Event @event, ScriptAccessory accessory)
         {
             var ActionId = @event.ActionId;
-            if (ActionId == 41538) //枪
+            if (ActionId == 41538)
             {
-                if(EnableTextBanner) accessory.Method.TextInfo("枪，远平A", 5000);
+                if (EnableTextBanner) accessory.Method.TextInfo("枪，远平A", 5000);
                 if (EnableTTS)
                 {
                     accessory.Method.EdgeTTS("远平A，3下");
@@ -2045,7 +1974,7 @@ namespace KodakkuAssistXSZYYS
             }
             else
             {
-                if(EnableTextBanner) accessory.Method.TextInfo("斧，近平A", 5000);
+                if (EnableTextBanner) accessory.Method.TextInfo("斧，近平A", 5000);
                 if (EnableTTS)
                 {
                     accessory.Method.EdgeTTS("近平A，3下");
@@ -2059,7 +1988,7 @@ namespace KodakkuAssistXSZYYS
         )]
         public void OnForkedFuryAlert(Event @event, ScriptAccessory accessory)
         {
-            if(EnableTextBanner) accessory.Method.TextInfo("远近死刑", 5000);
+            if (EnableTextBanner) accessory.Method.TextInfo("远近死刑", 5000);
             if (EnableTTS)
             {
                 accessory.Method.EdgeTTS("远近死刑，然后两下平A");
@@ -2074,7 +2003,6 @@ namespace KodakkuAssistXSZYYS
         {
             var caster = accessory.Data.Objects.SearchById(@event.SourceId);
             if (caster == null) return;
-
 
             var directionVector = @event.EffectPosition - caster.Position;
             var initialAngle = MathF.Atan2(directionVector.X, directionVector.Z);
@@ -2109,12 +2037,11 @@ namespace KodakkuAssistXSZYYS
             var caster = accessory.Data.Objects.SearchById(@event.SourceId);
             if (caster == null) return;
 
-            bool isLance = @event.ActionId == 41547; // 枪
+            bool isLance = @event.ActionId == 41547;
 
             var mainShapeDuration = isLance ? 6400 : 6100;
             var squareColor = isLance ? accessory.Data.DefaultDangerColor : new Vector4(0f, 0.6f, 0f, 0.8f);
 
-            // 绘制主AOE (月环或钢铁)
             if (isLance)
             {
                 var dpDonut = accessory.Data.GetDefaultDrawProperties();
@@ -2126,7 +2053,6 @@ namespace KodakkuAssistXSZYYS
                 dpDonut.Color = accessory.Data.DefaultDangerColor;
                 dpDonut.DestoryAt = mainShapeDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Donut, dpDonut);
-                // 为枪击绘制指路
                 var player = accessory.Data.MyObject;
                 if (player != null)
                 {
@@ -2147,7 +2073,7 @@ namespace KodakkuAssistXSZYYS
                     accessory.Method.EdgeTTS("月环");
                 }
             }
-            else // 斧击
+            else
             {
                 var dpCircle = accessory.Data.GetDefaultDrawProperties();
                 dpCircle.Name = "CriticalAxeblow_Circle";
@@ -2156,7 +2082,6 @@ namespace KodakkuAssistXSZYYS
                 dpCircle.Color = new Vector4(1f, 0f, 0f, 1.5f);
                 dpCircle.DestoryAt = mainShapeDuration;
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dpCircle);
-                // 为斧击绘制指路
                 var player = accessory.Data.MyObject;
                 if (player != null)
                 {
@@ -2177,7 +2102,6 @@ namespace KodakkuAssistXSZYYS
                     accessory.Method.EdgeTTS("钢铁");
                 }
             }
-            // 绘制三个方形AOE
             for (int i = 0; i < SquarePositions.Count; i++)
             {
                 var dpSquare = accessory.Data.GetDefaultDrawProperties();
@@ -2190,44 +2114,6 @@ namespace KodakkuAssistXSZYYS
                 accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Straight, dpSquare);
             }
         }
-        /*
-        [ScriptMethod(
-            name: "致命枪斧（指路）",
-            eventType: EventTypeEnum.StartCasting,
-            eventCondition: ["ActionId:regex:^(41547|41543)$"]
-        )]
-        public void CriticalBlowGuide(Event @event, ScriptAccessory accessory)
-        {
-            var player = accessory.Data.MyObject;
-            if (player == null) return;
-
-            bool isLance = @event.ActionId == 41547; // 枪
-            var safePositions = isLance ? CriticalLanceSafePositions : CriticalAxeSafePositions;
-            var duration = isLance ? 6400 : 6100;
-
-            Vector3 closestPos = safePositions[0];
-            float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
-            for (int i = 1; i < safePositions.Count; i++)
-            {
-                float distSq = Vector3.DistanceSquared(player.Position, safePositions[i]);
-                if (distSq < minDistanceSq)
-                {
-                    minDistanceSq = distSq;
-                    closestPos = safePositions[i];
-                }
-            }
-
-            var dpGuide = accessory.Data.GetDefaultDrawProperties();
-            dpGuide.Name = isLance ? "CriticalLance_Guide" : "CriticalAxe_Guide";
-            dpGuide.Owner = player.EntityId;
-            dpGuide.TargetPosition = closestPos;
-            dpGuide.Scale = new Vector2(1.5f);
-            dpGuide.ScaleMode |= ScaleMode.YByDistance;
-            dpGuide.Color = accessory.Data.DefaultSafeColor;
-            dpGuide.DestoryAt = duration;
-            accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dpGuide);
-        }
-        */
         [ScriptMethod(
             name: "大斧猎物 (9秒)",
             eventType: EventTypeEnum.StatusAdd,
@@ -2246,16 +2132,13 @@ namespace KodakkuAssistXSZYYS
                     }
                 }
             }
-            // 确认是自己获得了这个状态
             if (@event.TargetId != accessory.Data.Me) return;
 
-            // 检查buff持续时间是否为9秒
             if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 9.0f) < 0.1f)
             {
                 var player = accessory.Data.MyObject;
                 if (player == null) return;
 
-                // 找到最近的坐标点
                 Vector3 closestPos = GreataxePreyPositions[0];
                 float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
 
@@ -2269,7 +2152,6 @@ namespace KodakkuAssistXSZYYS
                     }
                 }
 
-                // 绘制指路
                 var dp = accessory.Data.GetDefaultDrawProperties();
                 dp.Name = "GreataxePrey_Guide";
                 dp.Owner = player.EntityId;
@@ -2300,16 +2182,13 @@ namespace KodakkuAssistXSZYYS
                     }
                 }
             }
-            // 确认是自己获得了这个状态
             if (@event.TargetId != accessory.Data.Me) return;
 
-            // 检查buff持续时间是否为9秒
             if (float.TryParse(@event["Duration"], out var duration) && Math.Abs(duration - 21.0f) < 0.1f)
             {
                 var player = accessory.Data.MyObject;
                 if (player == null) return;
                 await Task.Delay(15000);
-                // 找到最近的坐标点
                 Vector3 closestPos = GreataxePreyPositions[0];
                 float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
 
@@ -2323,7 +2202,6 @@ namespace KodakkuAssistXSZYYS
                     }
                 }
 
-                // 绘制指路
                 var dp = accessory.Data.GetDefaultDrawProperties();
                 dp.Name = "GreataxePrey_Guide";
                 dp.Owner = player.EntityId;
@@ -2362,15 +2240,12 @@ namespace KodakkuAssistXSZYYS
                     }
                 }
             }
-            // 确认是自己获得了这个状态
             if (@event.TargetId != accessory.Data.Me) return;
             var player = accessory.Data.MyObject;
             if (float.TryParse(@event["Duration"], out var duration))
             {
-                // 检查buff持续时间是否为13秒
                 if (Math.Abs(duration - 13.0f) < 0.1f)
                 {
-                    // 找到最近的坐标点
                     Vector3 closestPos = SquarePositions[0];
                     float minDistanceSq = Vector3.DistanceSquared(player.Position, closestPos);
 
@@ -2383,7 +2258,6 @@ namespace KodakkuAssistXSZYYS
                             closestPos = SquarePositions[i];
                         }
                     }
-                    // 绘制指路
                     var dp = accessory.Data.GetDefaultDrawProperties();
                     dp.Name = "LesseraxePrey_Guide";
                     dp.Owner = player.EntityId;
@@ -2394,21 +2268,7 @@ namespace KodakkuAssistXSZYYS
                     dp.DestoryAt = 13000;
                     accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
 
-                    /*
-                    // 在三个方形AOE中心点绘制绿色安全圈
-                    for (int i = 0; i < SquarePositions.Count; i++)
-                    {
-                        var dp = accessory.Data.GetDefaultDrawProperties();
-                        dp.Name = $"LittleAxePrey_SafeZone_13s_{i}";
-                        dp.Position = SquarePositions[i];
-                        dp.Scale = new Vector2(3);
-                        dp.Color = new Vector4(0, 1, 0, 1);
-                        dp.DestoryAt = 13000;
-                        accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp);
-                    }
-                    */
                 }
-                // 检查buff持续时间是否为21秒
                 else if (Math.Abs(duration - 21.0f) < 0.1f)
                 {
                     if (LongPointName)
@@ -2436,7 +2296,6 @@ namespace KodakkuAssistXSZYYS
                     }
                     else
                     {
-                        // 在第2个方形AOE中心点绘制绿色安全圈
                         var dp1 = accessory.Data.GetDefaultDrawProperties();
                         dp1.Name = "LittleAxePrey_SafeZone_21s_2";
                         dp1.Position = SquarePositions[1];
@@ -2446,7 +2305,6 @@ namespace KodakkuAssistXSZYYS
                         dp1.DestoryAt = 6000;
                         accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Circle, dp1);
 
-                        // 在第3个方形AOE中心点绘制绿色安全圈
                         var dp3 = accessory.Data.GetDefaultDrawProperties();
                         dp3.Name = "LittleAxePrey_SafeZone_21s_3";
                         dp3.Position = SquarePositions[2];
@@ -2459,44 +2317,6 @@ namespace KodakkuAssistXSZYYS
                 }
             }
         }
-        /*
-        [ScriptMethod(
-            name: "圣枪分摊点名",
-            eventType: EventTypeEnum.StatusAdd,
-            eventCondition: ["StatusID:4338"],
-            userControl: false)]
-        public void SacredBowPrey(Event @event, ScriptAccessory accessory)
-        {
-            if (PoliceMode)
-            {
-                CheckPreyPosition(accessory, @event.TargetId);
-                if (float.TryParse(@event["Duration"], out var duration1) && Math.Abs(duration1 - 17.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 圣枪分摊(17秒）点名: {target.Name}");
-                    }
-                }
-                else if (Math.Abs(duration1 - 25.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 圣枪分摊(25秒）点名: {target.Name}");
-                    }
-                }
-                else if (Math.Abs(duration1 - 33.0f) < 0.1f)
-                {
-                    var target = accessory.Data.Objects.SearchById(@event.TargetId);
-                    if (target != null)
-                    {
-                        accessory.Method.SendChat($"/e 圣枪分摊(33秒）点名: {target.Name}");
-                    }
-                }
-            }
-        }
-        */
         [ScriptMethod(
             name: "圣枪（指路）",
             eventType: EventTypeEnum.StartCasting,
@@ -2650,12 +2470,12 @@ namespace KodakkuAssistXSZYYS
             {
                 var props = new MultiDisDrawProp
                 {
-                    Color_GoNow = new Vector4(0, 1, 0, 1), // Green
-                    Color_GoLater = new Vector4(1, 1, 0, 1), // Yellow
+                    Color_GoNow = new Vector4(0, 1, 0, 1),
+                    Color_GoLater = new Vector4(1, 1, 0, 1),
                     DrawMode = DrawModeEnum.Imgui
                 };
                 accessory.MultiDisDraw(path, props);
-                if(Enable_Developer_Mode) accessory.Log.Debug($"圣枪机制：覆盖={HolyLanceGroupOverride}，策略={SelectedStrategy}。");
+                if (Enable_Developer_Mode) accessory.Log.Debug($"圣枪机制：覆盖={HolyLanceGroupOverride}，策略={SelectedStrategy}。");
             }
         }
         [ScriptMethod(
@@ -2671,12 +2491,12 @@ namespace KodakkuAssistXSZYYS
                 if (paramValue == 851)
                 {
                     _holyWeaponType = HolyWeaponType.Axe;
-                    if(Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为斧头。");
+                    if (Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为斧头。");
                 }
                 else if (paramValue == 852)
                 {
                     _holyWeaponType = HolyWeaponType.Lance;
-                    if(Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为长枪。");
+                    if (Enable_Developer_Mode) accessory.Log.Debug("神圣机制：记录为长枪。");
                 }
             }
         }
@@ -2685,7 +2505,7 @@ namespace KodakkuAssistXSZYYS
             name: "灵气爆 - 提示",
             eventType: EventTypeEnum.StartCasting,
             eventCondition: ["ActionId:41562"],
-            suppress:2000
+            suppress: 2000
         )]
         public void OnHallowedPlumeCast(Event @event, ScriptAccessory accessory)
         {
@@ -2702,13 +2522,12 @@ namespace KodakkuAssistXSZYYS
                     accessory.Log.Error("神圣机制：未能获取到武器类型。");
                     return;
             }
-            if(EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
+            if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
             if (EnableTTS)
             {
                 accessory.Method.EdgeTTS(hintText);
             }
 
-            // 重置状态
             _holyWeaponType = HolyWeaponType.None;
         }
         [ScriptMethod(
@@ -2732,13 +2551,12 @@ namespace KodakkuAssistXSZYYS
                     accessory.Log.Error("神圣机制：未能获取到武器类型。");
                     return;
             }
-            if(EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
+            if (EnableTextBanner) accessory.Method.TextInfo(hintText, 5000);
             if (EnableTTS)
             {
                 accessory.Method.EdgeTTS(hintText);
             }
 
-            // 重置状态
             _holyWeaponType = HolyWeaponType.None;
         }
         [ScriptMethod(
@@ -2796,7 +2614,6 @@ namespace KodakkuAssistXSZYYS
 
                 if (PoliceMode)
                 {
-                    // 为播报再次检查平台位置
                     int reportPlatformIndex = -1;
                     for (int i = 0; i < SquarePositions.Count; i++)
                     {
@@ -2829,7 +2646,7 @@ namespace KodakkuAssistXSZYYS
             // 检查buff是否为正常到期
             if (!float.TryParse(@event["Duration"], out var remainingDuration) || remainingDuration > 0.1f)
             {
-                return; // 如果持续时间不为0，说明是提前移除，不检查
+                return;
             }
 
             var player = accessory.Data.Objects.SearchById(@event.TargetId);
@@ -2880,10 +2697,6 @@ namespace KodakkuAssistXSZYYS
             }
         }
 
-
-
-
-
         private void CheckPreyPosition(ScriptAccessory accessory, ulong targetId)
         {
             // 如果已经检查过该玩家，则直接返回
@@ -2892,11 +2705,10 @@ namespace KodakkuAssistXSZYYS
                 if (_checkedPreyPlayers.Contains(targetId)) return;
                 _checkedPreyPlayers.Add(targetId);
             }
-            // 这个检查由小警察模式统一控制
             if (!PoliceMode) return;
 
             var player = accessory.Data.Objects.SearchById(targetId);
-            if (player == null) return; // 如果找不到该玩家（可能已离开范围），则不处理
+            if (player == null) return;
 
             bool isInAnySquare = false;
             for (int i = 0; i < SquarePositions.Count; i++)
@@ -2924,7 +2736,6 @@ namespace KodakkuAssistXSZYYS
 
             float rotatedX = translatedX * cosAngle - translatedZ * sinAngle;
             float rotatedZ = translatedX * sinAngle + translatedZ * cosAngle;
-
 
             return (Math.Abs(rotatedX) <= rectWidth / 2) && (Math.Abs(rotatedZ) <= rectHeight / 2);
         }
@@ -3027,7 +2838,7 @@ namespace KodakkuAssistXSZYYS
             var source = accessory.Data.Objects.SearchById(@event.SourceId);
             var target = accessory.Data.Objects.SearchById(@event.TargetId);
 
-            // 确保来源和目标都存在，且目标不是玩家
+
             if (source == null || target == null || !(source is IBattleChara) || !(target is IBattleChara))
                 return;
 
@@ -3110,7 +2921,7 @@ namespace KodakkuAssistXSZYYS
             var source = accessory.Data.Objects.SearchById(@event.SourceId);
             var target = accessory.Data.Objects.SearchById(@event.TargetId);
 
-            // 修正：确保来源和目标都是玩家
+
             if (source == null || target == null || !(source is IPlayerCharacter) || !(target is IPlayerCharacter))
                 return;
 
@@ -3161,7 +2972,7 @@ namespace KodakkuAssistXSZYYS
                         bossEntry.Value.Where(kvp => partyMemberNames.Contains(kvp.Key) && partyMemberNames.Contains(bossEntry.Key)).ToList()
                         : bossEntry.Value.ToList();
 
-                    if(filteredPlayers.Count > 0)
+                    if (filteredPlayers.Count > 0)
                     {
                         sortedData[bossEntry.Key] = filteredPlayers.OrderBy(kvp => kvp.Value).ToList();
                     }
@@ -3209,8 +3020,7 @@ namespace KodakkuAssistXSZYYS
         )]
         public void CheckTreasureChest(Event @event, ScriptAccessory accessory)
         {
-            if(Enable_Developer_Mode) accessory.Log.Debug("找到箱子");
-            //var chestid = @event.SourceId;
+            if (Enable_Developer_Mode) accessory.Log.Debug("找到箱子");
             var dp = accessory.Data.GetDefaultDrawProperties();
             dp.Name = "Chest";
             dp.Owner = accessory.Data.Me;
@@ -3230,7 +3040,6 @@ namespace KodakkuAssistXSZYYS
         )]
         public void RemoveTreasureChest(Event @event, ScriptAccessory accessory)
         {
-            //var chestid = @event.SourceId;
             accessory.Method.RemoveDraw("Chest");
         }
         [ScriptMethod(
@@ -3282,21 +3091,18 @@ namespace KodakkuAssistXSZYYS
         private bool IsTank(IPlayerCharacter player)
         {
             if (player?.ClassJob.Value == null) return false;
-            // 坦克的职业 Role ID 为 1
             return player.ClassJob.Value.Role == 1;
         }
 
         private bool IsHealer(IPlayerCharacter player)
         {
             if (player?.ClassJob.Value == null) return false;
-            // 治疗的职业 Role ID 为 4
             return player.ClassJob.Value.Role == 4;
         }
 
         private bool IsDps(IPlayerCharacter player)
         {
             if (player?.ClassJob.Value == null) return false;
-            // 只要不是坦克和治疗，就是DPS
             return !IsTank(player) && !IsHealer(player);
         }
         private Vector3 RotatePoint(Vector3 point, Vector3 center, float angleRad)
@@ -3304,21 +3110,17 @@ namespace KodakkuAssistXSZYYS
             float s = MathF.Sin(angleRad);
             float c = MathF.Cos(angleRad);
 
-            // Translate point back to origin
             point.X -= center.X;
             point.Z -= center.Z;
 
-            // Rotate point
             float xnew = point.X * c - point.Z * s;
             float znew = point.X * s + point.Z * c;
 
-            // Translate point back
             point.X = xnew + center.X;
             point.Z = znew + center.Z;
             return point;
         }
         #endregion
-
 
     }
     #region Helper_Classes_And_Methods
@@ -3362,7 +3164,6 @@ namespace KodakkuAssistXSZYYS
         internal static void MultiDisDraw(this ScriptAccessory accessory, List<DisplacementContainer> list, MultiDisDrawProp prop)
         {
             long startTimeMillis = prop.BaseDelay;
-            const long preMs = 270;
             string guid = Guid.NewGuid().ToString();
             for (int i = 0; i < list.Count; i++)
             {
@@ -3394,7 +3195,6 @@ namespace KodakkuAssistXSZYYS
                     accessory.Method.SendDraw(prop.DrawMode, DrawTypeEnum.Circle, dp_goNowCircle);
                 }
 
-                //如果当前点位不是最后一个点位，则进行go later部分
                 if (i < list.Count - 1)
                 {
                     DrawPropertiesEdit dp_goLaterLine = accessory.Data.GetDefaultDrawProperties();

@@ -1,22 +1,10 @@
 using System;
-using System.Collections.Generic;
-using System.Globalization;
 using System.Numerics;
-using System.Linq;
-using System.Runtime.ConstrainedExecution;
 using System.Threading.Tasks;
-using Dalamud.Interface.ManagedFontAtlas;
 using KodakkuAssist.Data;
 using KodakkuAssist.Module.Draw;
 using KodakkuAssist.Module.GameEvent;
 using KodakkuAssist.Script;
-using KodakkuAssist.Extensions;
-using Newtonsoft.Json;
-using System.Runtime.Intrinsics.Arm;
-using KodakkuAssist.Module.GameEvent.Struct;
-using KodakkuAssist.Module.GameOperate;
-using System.Collections.Concurrent;
-using KodakkuAssist.Module.Draw.Manager;
 
 namespace KodakkuAssistXSZYYS
 {
@@ -52,17 +40,17 @@ namespace KodakkuAssistXSZYYS
                 dp.DestoryAt = 60000;
                 accessory.Method.SendDraw(DrawModeEnum.Imgui, DrawTypeEnum.Displacement, dp);
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 accessory.Log.Debug("未找到复活");
             }
         }
         [ScriptMethod(
-            name:"移除复活",
+            name: "移除复活",
             eventType: EventTypeEnum.StatusRemove,
             eventCondition: ["StatusID:148"],
             userControl: false
-            )]
+        )]
         public void RemoveReborn(Event @event, ScriptAccessory accessory)
         {
             accessory.Method.RemoveDraw("RebornPosition");

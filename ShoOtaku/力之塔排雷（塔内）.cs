@@ -1,25 +1,11 @@
-using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Numerics;
-using System.Linq;
-using System.Runtime.ConstrainedExecution;
 using System.Threading.Tasks;
-using Dalamud.Interface.ManagedFontAtlas;
 using KodakkuAssist.Data;
 using KodakkuAssist.Module.Draw;
+using KodakkuAssist.Module.Draw.Manager;
 using KodakkuAssist.Module.GameEvent;
 using KodakkuAssist.Script;
-using KodakkuAssist.Extensions;
-using Newtonsoft.Json;
-using System.Runtime.Intrinsics.Arm;
-using KodakkuAssist.Module.GameEvent.Struct;
-using KodakkuAssist.Module.GameOperate;
-using System.Collections.Concurrent;
-using KodakkuAssist.Module.Draw.Manager;
-
-
-
 
 namespace KodakkuAssistXSZYYS
 {
@@ -36,7 +22,6 @@ namespace KodakkuAssistXSZYYS
             public List<Mine> Mines = new List<Mine>();
         }
 
-        // 数据已按地图ID分类
         public static readonly Dictionary<uint, List<MineGroup>> MinesByMap = new Dictionary<uint, List<MineGroup>>
         {
             // --- Map ID: 969 Data ---
@@ -171,7 +156,7 @@ namespace KodakkuAssistXSZYYS
                     new Mine { Position = new Vector3(-433.965f, -852f, 336f), IsLarge = true },
                 }},
             },
-             // --- Map ID: 971 Data ---
+            // --- Map ID: 971 Data ---
             [971] = new List<MineGroup>
             {
                 new MineGroup { Mines = {
@@ -208,7 +193,7 @@ namespace KodakkuAssistXSZYYS
                     new Mine { Position = new Vector3(771.499f, -499.890f, -335.971f), IsLarge = true }, new Mine { Position = new Vector3(765.746f, -499.874f, -354.508f), IsLarge = true },
                 }},
             },
-             // --- Map ID: 986 Data ---
+            // --- Map ID: 986 Data ---
             [986] = new List<MineGroup>
             {
                 new MineGroup { Mines = {
@@ -270,7 +255,6 @@ namespace KodakkuAssistXSZYYS
         private bool _areMinesShown = false;
         private uint _currentMapId = 0;
         private readonly object _lock = new object();
-        // 脚本初始化时调用，用于重置状态
         public void Init(ScriptAccessory accessory)
         {
             lock (_lock)
@@ -278,20 +262,19 @@ namespace KodakkuAssistXSZYYS
                 _areMinesShown = false;
                 _currentMapId = 0;
             }
-            // 移除所有可能残留的绘图
+
             accessory.Method.RemoveDraw(".*");
             accessory.Log.Debug("新月岛排雷脚本已初始化。");
         }
         [ScriptMethod(
             name: "切换地雷位置显示",
             eventType: EventTypeEnum.Chat,
-            eventCondition: ["Type:Echo", "Message:新月排雷"] // 使用 /echo 新月排雷 触发
+            eventCondition: ["Type:Echo", "Message:新月排雷"]
         )]
         public void ToggleMineDisplay(Event @event, ScriptAccessory accessory)
         {
             lock (_lock)
             {
-                // 检查当前地图是否有地雷数据
                 if (!EOMineDatabase.MinesByMap.ContainsKey(_currentMapId))
                 {
                     accessory.Method.TextInfo("当前地图无地雷数据。", 2000);
@@ -347,7 +330,6 @@ namespace KodakkuAssistXSZYYS
 
         private async void HandleEnterMineMap(uint mapId, ScriptAccessory accessory)
         {
-            // 增加重复加载的判断
             if (mapId == _currentMapId)
             {
                 accessory.Log.Debug($"重复触发进入地图 {mapId} 事件，已忽略。");
@@ -412,19 +394,19 @@ namespace KodakkuAssistXSZYYS
                             innerMineIndex++;
                         }
 
-                        // Add a small delay to ensure remove commands are processed
+                        // 等待移除命令生效，避免旧标记与爆炸范围同时存在。
                         await Task.Delay(50);
 
                         DrawPropertiesEdit dp = accessory.Data.GetDefaultDrawProperties();
                         dp.Name = $"EO_Explosion_G{groupIndex}_M{mineIndex}";
                         dp.Position = spawnedPosition;
-                        dp.Color = new Vector4(1.0f, 0.0f, 0.0f, 0.6f); // 红色, 60% a
-                        dp.DestoryAt = 1000000; // 显示1000秒
+                        dp.Color = new Vector4(1.0f, 0.0f, 0.0f, 0.6f);
+                        dp.DestoryAt = 1000000;
 
                         dp.Scale = isLargeSpawned ? new Vector2(30f, 30f) : new Vector2(7f, 7f);
 
                         accessory.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Circle, dp);
-                        return; // Found and handled
+                        return;
                     }
                     mineIndex++;
                 }

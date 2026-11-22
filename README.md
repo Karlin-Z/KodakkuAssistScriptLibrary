@@ -1,87 +1,31 @@
 # 可达鸭官方在线脚本库
 
-> FF14卫月**可达鸭**插件的官方在线库
->
+FF14 卫月**可达鸭**插件的官方在线脚本库。脚本作者可以通过提交 Pull Request 的方式，让官方在线库收录你的脚本。
 
-如果你是脚本作者，那么可以直接通过提 pr 的方式，来让官方在线库收录你的脚本。
-
-
-
-## 如何贡献
+## 贡献流程
 
 1. Fork 本仓库。
-2. 在**仓库根目录**新建以你的 GitHub 用户名命名的文件夹。
-	> 例如 `Karlin-Z/`；用户名不区分大小写，建议完全一致
-3. 把 `.cs` 文件放进去。单文件脚本直接放。
-	> 多文件脚本（主文件 + 多个子文件）见下面的 [多文件脚本](#多文件脚本)
+2. 在仓库根目录新建以你的 GitHub 用户名命名的文件夹，例如 `Karlin-Z/`；用户名不区分大小写，建议完全一致。
+3. 把 `.cs` 文件放进去，单文件脚本直接放；多文件脚本见下方[多文件脚本](#多文件脚本)。
 4. 向 `main` 分支提交 Pull Request。
 
-### 自动审核：
+提交后机器人会自动审核：
 
-- **只改自己文件夹 + 校验通过** → 自动 squash 合并，并重建索引；
-- **改别人文件夹 + 校验通过** → 不自动合并，机器人会打上 `跨作者修改` 标签、@ 文件夹所有者；所有者在 PR 里回复批准命令（默认 `/approve`）后，只对机器人审核过的当前版本合并；
-- **同时改多个别人的文件夹** → 直接不通过，请拆成多个 PR；
-- **校验不通过** → 在 PR 下留言列出问题，不会合并，改好后重新推送即可。
+- 只改自己文件夹且校验通过 → 自动 squash 合并，并重建索引；
+- 改别人文件夹且校验通过 → 不自动合并，机器人打上 `跨作者修改` 标签并 @ 文件夹所有者，所有者在 PR 里回复批准命令（默认 `/approve`）后合并；
+- 同时改多个别人的文件夹 → 直接不通过，请拆成多个 PR；
+- 校验不通过 → 机器人在 PR 下留言列出问题，不会合并，改好后重新推送即可。
 
-> 每个 PR 只有改你自己文件夹里的 `.cs` 才会自动合并。
->
-> `.github/` 文件夹和根目录的文件仍然会被拒绝。
-
-
-
-## 本地开发环境
-
-1. 安装 .NET 10 SDK；
-2. 安装可达鸭插件和 Dalamud；
-3. 用 VS Code（C# Dev Kit）或 Rider 打开，即可获得类型提示、跳转和错误检查。
-
-项目会自动探测：
-
-- 根目录 `local.props` 里的 `KaPluginDir`
-- `%APPDATA%\XIVLauncherCN\installedPlugins\KodakkuAssist\*\`（或 `XIVLauncher`）
-- 同级仓库的 `KodakkuAssist\KodakkuAssist\bin\Debug\net10.0-windows\`
-- 本目录 `refs\`
-
-Dalamud 从 `%APPDATA%\XIVLauncherCN\addon\Hooks\dev\`（或 `XIVLauncher`）自动探测。
-
-脚本默认按已安装插件编译；如果你在本地编译插件、想对着 Debug 产物写脚本，在根目录新建 `local.props`，设置 `KaPluginDir` 指向包含 `KodakkuAssist.dll` 的 Debug 输出目录（结尾分隔符可省略）；`local.props` 不会入库。
-
-新增作者目录时，复制任意现有作者的 `.csproj`（例如 `Karlin-Z/Karlin-Z.csproj`）到新目录并改名为 `<用户名>.csproj`。
-
-## 脚本编写说明
-
-- 更多脚本编写说明请参考： [脚本说明书](script-writing-guide.md)
-
+## 脚本编写要点
 
 ### 脚本模板
 
-- `SimpleScript.cs` 是官方示例，可直接复制来改。
-
-- **复制时务必改掉 `guid`**：  [GUID生成器](https://www.iamwawa.cn/guid.html)
+`SimpleScript.cs` 是官方示例，可直接复制来改。复制时务必改掉 `guid`，可用 [GUID 生成器](https://www.iamwawa.cn/guid.html) 生成。
 
 ```csharp
-[ScriptType(name: "M1s绘图", territorys: [1226], guid: "8010d865-7d6d-4c23-92e0-f4b0120e18ac",version: "0.0.0.9", author: "Karlin")]
+[ScriptType(name: "M1s绘图", territorys: [1226], guid: "8010d865-7d6d-4c23-92e0-f4b0120e18ac", version: "0.0.0.9", author: "Karlin")]
 public class M1s { }
 ```
-
-### 多文件脚本
-
-同一个脚本可以拆成多个文件，放在同一个文件夹里：
-
-```
-YourName/副本名/
-    MyScript.cs          // 主文件：[ScriptType(...)] + partial class MyScript
-    MyScript.P1.cs       // partial class MyScript
-    MyScript.P2.cs       // partial class MyScript
-```
-
-要求：
-
-- 所有文件声明**同一个命名空间、同一个 `partial` 类型名**，每个文件都要写 `partial`；
-- 只有主文件写 `[ScriptType(...)]`，part 文件不要写；
-- 所有 part 必须和主文件在**同一个文件夹**（插件下载后会平铺到同一目录，跨目录不会合并）；
-- 索引会自动生成 `Parts`，下载时整组一起下发，作者不需要手写下载链接；
-- `version` / `guid` / `updateInfo` 只写在主文件里，更新时整组一起提交。
 
 ### ScriptType 参数
 
@@ -95,44 +39,94 @@ YourName/副本名/
 | `note` | string | 否 | 备注（鼠标悬停显示） |
 | `updateInfo` | string | 否 | 更新说明 |
 
+### 多文件脚本
 
+同一个脚本可以拆成多个文件，放在同一个文件夹里：
+
+```text
+YourName/副本名/
+    MyScript.cs          // 主文件：[ScriptType(...)] + partial class MyScript
+    MyScript.P1.cs       // partial class MyScript
+    MyScript.P2.cs       // partial class MyScript
+```
+
+要求：
+
+- 所有文件声明同一个命名空间、同一个 `partial` 类型名，每个文件都要写 `partial`；
+- 只有主文件写 `[ScriptType(...)]`，part 文件不要写；
+- 所有 part 必须和主文件在同一个文件夹（插件下载后会平铺到同一目录，跨目录不会合并）；
+- 索引会自动生成 `Parts`，下载时整组一起下发，作者不需要手写下载链接；
+- `version` / `guid` / `updateInfo` 只写在主文件里，更新时整组一起提交。
+
+更多脚本编写说明请参考[脚本说明书](script-writing-guide.md)。
+
+## 本地开发环境
+
+1. 安装 .NET 10 SDK；
+2. 安装可达鸭插件和 Dalamud；
+3. 在自己目录下创建一个与目录同名的 `<用户名>.csproj` 文件，内容直接复制以下内容，即可获得类型提示、跳转和错误检查：
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>KodakkuScripts.$(MSBuildProjectName)</AssemblyName>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="$(MSBuildProjectDirectory)\**\*.cs" Exclude="bin\**;obj\**" />
+  </ItemGroup>
+</Project>
+```
+
+项目会自动探测：
+
+- 根目录 `local.props` 里的 `KaPluginDir`
+- `%APPDATA%\XIVLauncherCN\installedPlugins\KodakkuAssist\*\`（或 `XIVLauncher`）
+- 同级仓库的 `KodakkuAssist\KodakkuAssist\bin\Debug\net10.0-windows\`
+- 本目录 `refs\`
+
+Dalamud 从 `%APPDATA%\XIVLauncherCN\addon\Hooks\dev\`（或 `XIVLauncher`）自动探测。
+
+脚本默认按已安装插件编译。如果你在本地编译插件、想对着 Debug 产物写脚本，在根目录新建 `local.props`，设置 `KaPluginDir` 指向包含 `KodakkuAssist.dll` 的 Debug 输出目录（结尾分隔符可省略）；`local.props` 不会入库。
 
 ## 审核规则
 
-### **自动合并的条件（全部满足才会自动合并）：**
+### 自动合并的条件
+
+以下条件全部满足才会自动合并：
 
 1. 改动路径的第一层文件夹必须等于 PR 作者的 GitHub 用户名；重命名时，改名前后两个路径都要满足。
-   - 不满足时不会直接拒绝，而是转为「待人工审核」，见下面的「修改别人的脚本」。
-   - 一个 PR 最多只能修改一个别人的文件夹；同时修改多个会直接判为不通过，请拆成多个 PR。
-2. 只允许新增 / 修改 / 删除 `.cs` 文件，以及作者目录根下与目录同名的 `.csproj`（复制任意现有作者的项目文件，不要修改内容）。
-3. 每个脚本的主文件必须包含**恰好一处** `[ScriptType(...)]`（或 `[ScriptTypeAttribute(...)]`）：
-   - 主文件一处都没有，或出现两处及以上 → 拒绝（注释、字符串里的写法不计入）；
-   - 多文件脚本的 part 文件必须是同一文件夹下的同名 `partial` 类型声明，且不能写 `[ScriptType]`；
-   - 同一文件夹里找不到主文件的孤立 part → 拒绝；
-   - 同一个 `partial` 类型在两个文件里都写了 `[ScriptType]` → 拒绝；
-   - `guid` 必须是非空字符串；
-   - `version` 必须是合法版本号；
-   - `territorys` 必须是 0~4294967295 的整数数组，如 `[1226, 1228]`；
-   - `name` / `author` 必须能安全用作文件名（插件按 `Name_Author.cs` 保存下载的脚本），
-     不能含 `/ \ : * ? " < > |`、控制字符、`..`，也不能是 `CON` / `NUL` 这类 Windows 保留名。
+    - 不满足时不会直接拒绝，而是转为「待人工审核」，见下方[修改别人的脚本](#修改别人的脚本)。
+    - 一个 PR 最多只能修改一个别人的文件夹；同时修改多个会直接判为不通过，请拆成多个 PR。
+2. 只允许新增 / 修改 / 删除 `.cs` 文件，以及作者目录根下与目录同名的 `.csproj`（复制任意现有作者的项目文件，不要修改内容）；`.github/` 文件夹和根目录的文件仍然会被拒绝。
+3. 每个脚本的主文件必须包含恰好一处 `[ScriptType(...)]`（或 `[ScriptTypeAttribute(...)]`）：
+    - 主文件一处都没有，或出现两处及以上 → 拒绝（注释、字符串里的写法不计入）；
+    - 多文件脚本的 part 文件必须是同一文件夹下的同名 `partial` 类型声明，且不能写 `[ScriptType]`；
+    - 同一文件夹里找不到主文件的孤立 part → 拒绝；
+    - 同一个 `partial` 类型在两个文件里都写了 `[ScriptType]` → 拒绝；
+    - `guid` 必须是非空字符串；
+    - `version` 必须是合法版本号；
+    - `territorys` 必须是 0~4294967295 的整数数组，如 `[1226, 1228]`；
+    - `name` / `author` 必须能安全用作文件名（插件按 `Name_Author.cs` 保存下载的脚本），不能含 `/ \ : * ? " < > |`、控制字符、`..`，也不能是 `CON` / `NUL` 这类 Windows 保留名。
 4. `guid` 不能与已有脚本冲突：
-   - 被**别人的**脚本占用 → 拒绝；
-   - 被**你自己文件夹里的另一个文件**占用 → 拒绝；
-   - 同一个 PR 里两个文件用了同一个 guid → 拒绝；
-   - 重命名 / 移动自己的文件（guid 不变）→ 放行。
+    - 被别人的脚本占用 → 拒绝；
+    - 被你自己文件夹里的另一个文件占用 → 拒绝；
+    - 同一个 PR 里两个文件用了同一个 guid → 拒绝；
+    - 重命名 / 移动自己的文件（guid 不变）→ 放行。
 5. 文件必须是合法 UTF-8；不允许符号链接、子模块；单文件不超过 2 MB；单个 PR 不超过 100 个文件。
 
-### **修改别人的脚本：**
+### 修改别人的脚本
 
 1. 同样 Fork 本仓库，直接修改对方文件夹里的 `.cs`，然后提交 PR。
-2. 机器人仍会校验文件内容和 `guid`。校验通过后**不会自动合并**，而是给 PR 打上 `跨作者修改` 标签，并 @ 文件夹所有者。
-3. 文件夹所有者本人在 PR 会话里**只回复一条**批准命令（默认 `/approve`，也支持 `/同意合并`），机器人会重新校验当前代码并自动 squash 合并。命令必须单独成条，带其它文字不会触发。
-4. 批准只对机器人已经审核过的**当前版本**有效。待审核评论里会显示短 SHA；如果作者在批准前后又推了新提交，旧的批准会自动失效，需要等待机器人重新审核后再次确认。
+2. 机器人仍会校验文件内容和 `guid`。校验通过后不会自动合并，而是给 PR 打上 `跨作者修改` 标签，并 @ 文件夹所有者。
+3. 文件夹所有者本人在 PR 会话里只回复一条批准命令（默认 `/approve`，也支持 `/同意合并`），机器人会重新校验当前代码并自动 squash 合并。命令必须单独成条，带其它文字不会触发。
+4. 批准只对机器人已经审核过的当前版本有效。待审核评论里会显示短 SHA；如果作者在批准前后又推了新提交，旧的批准会自动失效，需要等待机器人重新审核后再次确认。
 5. 一个 PR 只能修改一个其他作者的文件夹；同时修改多个会直接不通过，请拆成多个 PR 分别提交。
 
 > 如果原作者已经不再维护，维护者可以直接确认合并或接管；想长期共同维护的话，建议双方先约定好，再由维护者调整文件夹归属。
 
-### **只提醒、不阻塞的检查（会出现在 PR 评论里）：**
+### 仅提醒、不阻塞
+
+以下问题只会出现在 PR 评论里，不会阻塞合并：
 
 - 没写 `name` / `version` / `territorys`，将使用插件默认值；
 - 没写 `author` 或写成 `Unknown`，改用文件夹名；

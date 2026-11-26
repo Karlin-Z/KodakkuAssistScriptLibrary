@@ -23,23 +23,47 @@ namespace Codaaaaaa.TheForkedTowerMagic;
     guid: "45819e25-cb2d-4d84-a508-f110dc6a381a",
     name: "魔之塔画图",
     territorys: [1346],
-    version: "0.0.1.11",
+    version: "0.0.1.12",
     author: "Codaaaaaa",
     note: "写完喽，还有电的可以在频道里圈我\n\n感谢铁虎老大的帮助\n感谢Yatel老大和洋葱炒米老大的arr")]
 public class TheForkedTowerMagic
 {
     #region 用户设置
-    [UserSetting("双头决战：只能选中自己Buff对应的头")] public static bool DualHeadTargetLock { get; set; } = false;
     [UserSetting("排雷：显示塔内地雷点位（进图自动显示，/e 新月排雷 手动开关）")] public static bool 排雷显示 { get; set; } = true;
     [UserSetting("钟灵时钟：播报要打的钟灵 + 拉怪错误提醒")] public static bool 钟灵时钟启用 { get; set; } = false;
-    [UserSetting("测试")] public static bool Debug输出 { get; set; } = false;
     // [UserSetting("是否开启TTS")] public static bool TTSOpen { get; set; } = true;
+
+    // 非原生：改写游戏客户端的功能（往游戏里放 VFX、改目标可选中等），每个都要有开关
+    [UserSetting("———— * 特殊功能（非原生） ————")] public bool __ { get; set; } = true;
+    // 改名自 DualHeadTargetLock：旧键存档里是 false，换新键默认值 true 才对老用户生效
+    [UserSetting("*双头决战：只能选中自己Buff对应的头（屏蔽打不到的头）")] public static bool 双头决战目标限制 { get; set; } = true;
+    [UserSetting("*绿头风暴吐息（普通 + 超魔）：用游戏原生预兆特效(VFX)绘制\n关闭后改用普通绘制")] public static bool 风暴吐息VFX { get; set; } = true;
+    [UserSetting("*超魔BOSS1 位移吐息：用游戏原生预兆特效(VFX)绘制\n关闭后改为在自己脚下画击退方向箭头")] public static bool 位移吐息VFX { get; set; } = true;
+    [UserSetting("*黑暗奔流（普通 + 超魔 + 超魔魔具联动直线）：用游戏原生预兆特效(VFX)绘制\n关闭后改用普通绘制")] public static bool 黑暗奔流VFX { get; set; } = true;
+
+    [UserSetting("测试")] public static bool Debug输出 { get; set; } = false;
     #endregion
 
     private void Dbg(ScriptAccessory sa, string msg)
     {
         if (!Debug输出) return;
         sa.Method.SendChat($"/e [魔之塔] {msg}");
+    }
+
+    // 非原生：CreateOmen 往游戏里放原生预兆；对应的 VFX 开关关掉时退回插件绘制（rect omen 的 X 是半宽、Z 是全长）
+    private static void 画预兆(ScriptAccessory sa, bool useVfx, string name, uint omenId, Vector3 omenScale, DrawTypeEnum type,
+        Vector3 pos, float rot, Vector4? color, int durationMs)
+    {
+        if (useVfx)
+        {
+            sa.Method.VfxMethod.CreateOmen(omenId, omenScale, pos, rot, color, durationMs);
+            return;
+        }
+        var scale = type == DrawTypeEnum.Rect ? new Vector2(omenScale.X * 2, omenScale.Z) : new Vector2(omenScale.X);
+        var dp = sa.FastDp(name, pos, (uint)durationMs, scale);
+        dp.Rotation = rot;
+        if (color is { } c) dp.Color = c;
+        sa.Method.SendDraw(DrawModeEnum.Default, type, dp);
     }
     // 超魔自身会有Status 4228，普通没有
     private const uint 超魔Buff = 4228;
@@ -96,7 +120,7 @@ public class TheForkedTowerMagic
     [ScriptMethod(name: "BOSS1 - 决战Buff目标限制", eventType: EventTypeEnum.StatusAdd, eventCondition: ["StatusID:regex:^(419[24])$"], userControl: true)]
     public void 双头决战Buff目标限制(Event evt, ScriptAccessory sa)
     {
-        if (!DualHeadTargetLock) return;
+        if (!双头决战目标限制) return;
         if (_dualHeadLockOn) return;
         _dualHeadLockOn = true;
         _dualHeadLockState = 0;
@@ -111,7 +135,8 @@ public class TheForkedTowerMagic
             var myObject = sa.Data.MyObject;
             if (myObject is null) return;
 
-            int currentState = (myObject.HasStatus(绿头Buff), myObject.HasStatus(蓝头Buff)) switch
+            // 战斗中关掉设置：按无限制处理，两个头都恢复可选中
+            int currentState = !双头决战目标限制 ? 无限制 : (myObject.HasStatus(绿头Buff), myObject.HasStatus(蓝头Buff)) switch
             {
                 (true, false) => 打绿头,
                 (false, true) => 打蓝头,
@@ -154,10 +179,8 @@ public class TheForkedTowerMagic
     // 47616 绿头风暴吐息：8s，EffectPosition 上 CreateOmen 386
     [ScriptMethod(name: "BOSS1 - 绿头风暴吐息", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:47616"])]
     public void 绿头风暴吐息(Event evt, ScriptAccessory sa)
-    {
-        sa.Method.VfxMethod.CreateOmen(530, new Vector3(30f),
-            evt.EffectPosition(), evt.SourceRotation(), new Vector4(1f,1f,1f,0.2f), 8000);
-    }
+        => 画预兆(sa, 风暴吐息VFX, "绿头风暴吐息", 530, new Vector3(30f), DrawTypeEnum.Circle,
+            evt.EffectPosition(), evt.SourceRotation(), new Vector4(1f, 1f, 1f, 0.2f), 8000);
 
     // 50658 双头恐惧：TargetPosition为起点，按SourceRotation画6s矩形，长40宽10
     [ScriptMethod(name: "BOSS1 - 双头恐惧", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:50658"])]
@@ -174,17 +197,23 @@ public class TheForkedTowerMagic
     public void 定时诅咒击退(Event evt, ScriptAccessory sa)
     {
         if (evt.TargetId() != sa.Data.Me) return;
-        var dir = evt.StatusId == 5403 ? new Vector3(-1, 0, 0) : new Vector3(1, 0, 0);
+        var rot = evt.StatusId == 5403 ? -MathF.PI / 2 : MathF.PI / 2;   // 东风往 -X、西风往 +X
+        画击退箭头(sa, $"定时诅咒击退-{evt.StatusId}", rot, 15f, 13000);
+    }
 
+    // 自己脚下画固定朝向的击退箭头：rot = 击退方向，length = 击退距离
+    private static void 画击退箭头(ScriptAccessory sa, string name, float rot, float length, uint durationMs,
+        DrawModeEnum mode = DrawModeEnum.Default)
+    {
         var dp = sa.Data.GetDefaultDrawProperties();
-        dp.Name = $"定时诅咒击退-{evt.StatusId}";
+        dp.Name = name;
         dp.Owner = sa.Data.Me;
         dp.FixRotation = true;
-        dp.Rotation = MathF.Atan2(dir.X, dir.Z);
+        dp.Rotation = rot;
         dp.Color = new Vector4(1f, 1f, 0f, 1f);
-        dp.DestoryAt = 13000;
-        dp.Scale = new Vector2(0.7f, 15f);
-        sa.Method.SendDraw(DrawModeEnum.Default, DrawTypeEnum.Displacement, dp);
+        dp.DestoryAt = durationMs;
+        dp.Scale = new Vector2(0.7f, length);
+        sa.Method.SendDraw(mode, DrawTypeEnum.Displacement, dp);
     }
 
     // 19478 雷球出现，记录位置
@@ -609,7 +638,7 @@ public class TheForkedTowerMagic
     public void B3黑暗奔流(Event evt, ScriptAccessory sa)
     {
         Dbg(sa, $"黑暗奔流(47477)：pos {evt.EffectPosition():F1} rot {evt.SourceRotation():F2}");
-        sa.Method.VfxMethod.CreateOmen(689, new Vector3(5f, 10f, 60f),
+        画预兆(sa, 黑暗奔流VFX, $"黑暗奔流-{evt.SourceId()}", 689, new Vector3(5f, 10f, 60f), DrawTypeEnum.Rect,
             evt.EffectPosition(), evt.SourceRotation(), null, 4000);
     }
 
@@ -849,10 +878,8 @@ public class TheForkedTowerMagic
     // 47638 绿头风暴吐息：9s，EffectPosition 上 CreateOmen 386
     [ScriptMethod(name: "超魔BOSS1 - 绿头风暴吐息", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:47638"])]
     public void 超魔绿头风暴吐息(Event evt, ScriptAccessory sa)
-    {
-        sa.Method.VfxMethod.CreateOmen(530, new Vector3(30f),
-            evt.EffectPosition(), evt.SourceRotation(), new Vector4(1f,1f,1f,0.2f), 8000);
-    }
+        => 画预兆(sa, 风暴吐息VFX, "超魔绿头风暴吐息", 530, new Vector3(30f), DrawTypeEnum.Circle,
+            evt.EffectPosition(), evt.SourceRotation(), new Vector4(1f, 1f, 1f, 0.2f), 8000);
 
     // 47640 绿头雷电赋格：9s，EffectPosition 月环 内15外60
     [ScriptMethod(name: "超魔BOSS1 - 绿头雷电赋格", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:47640"])]
@@ -1254,6 +1281,7 @@ public class TheForkedTowerMagic
 
     // —— 位移吐息：自己身上的status决定方向 ——
     private static int B1位移吐息时长(uint actionId) => actionId == 50708 ? 6000 : 11000;
+    private const float 位移吐息击退距离 = 8f;
 
     // SourceName判色（Green/绿 或 Blue/蓝）；统一只画最后3s，只有delay随读条长短不同
     [ScriptMethod(name: "超魔BOSS1 - 位移吐息", eventType: EventTypeEnum.StartCasting, eventCondition: ["ActionId:regex:^5070[6-8]$"])]
@@ -1283,8 +1311,11 @@ public class TheForkedTowerMagic
         var pos = isLeft ? new Vector3(-880f, -980f, 700f) : new Vector3(-920f, -980f, 700f);
         var rot = isLeft ? -MathF.PI / 2 : MathF.PI / 2;
         Dbg(sa, $"位移吐息({actionId}+{statusId})：{(isBlue ? "蓝头" : "绿头")}向{(isLeft ? "左" : "右")}位移");
-        sa.Method.VfxMethod.CreateOmen(314, new Vector3(20f, 10f, 40f),
-            pos, rot, new Vector4(1f, 1f, 1f, 0.3f), duration);
+        // rot 就是击退方向；关掉 VFX 时不画矩形，改在自己脚下画击退箭头
+        if (位移吐息VFX)
+            sa.Method.VfxMethod.CreateOmen(314, new Vector3(20f, 10f, 40f), pos, rot, new Vector4(1f, 1f, 1f, 0.3f), duration);
+        else
+            画击退箭头(sa, "位移吐息击退", rot, 位移吐息击退距离, duration, DrawModeEnum.Imgui);
     }
 
     // —— 十字/月环连招预告 ——
@@ -1789,7 +1820,7 @@ public class TheForkedTowerMagic
     public void 超魔B3直线47500(Event evt, ScriptAccessory sa)
     {
         Dbg(sa, $"直线(47500)：pos {evt.EffectPosition():F1} rot {evt.SourceRotation():F2}");
-        sa.Method.VfxMethod.CreateOmen(689, new Vector3(5f, 10f, 60f),
+        画预兆(sa, 黑暗奔流VFX, $"超魔黑暗奔流-{evt.SourceId()}", 689, new Vector3(5f, 10f, 60f), DrawTypeEnum.Rect,
             evt.EffectPosition(), evt.SourceRotation(), null, 4000);
     }
 
@@ -1947,7 +1978,7 @@ public class TheForkedTowerMagic
 
         // 直线：Omen 689（X=半宽 Z=全长），从场边锚点沿rot穿过场中心，等上一波结算后再出现
         if (delay > 0) await Task.Delay((int)delay);
-        sa.Method.VfxMethod.CreateOmen(689, new Vector3(5f, 10f, 60f), anchor, rot, null, (int)visible);
+        画预兆(sa, 黑暗奔流VFX, $"B3联动直线-{wave}", 689, new Vector3(5f, 10f, 60f), DrawTypeEnum.Rect, anchor, rot, null, (int)visible);
     }
 
     // 47507 魔具联动：黑暗奔流读条开始：开闸，期间的2552触发绘制

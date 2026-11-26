@@ -23,7 +23,7 @@ namespace Codaaaaaa.M11S;
     territorys: [1325],
     version: "0.0.1.3",
     author: "Codaaaaaa",
-    note: "设置里面改打法，但目前支持的不是很多有很大概率被电。\n- 该脚本只对RyougiMio佬的画图更新前做指路补充，需要配合使用。\n- 谢谢灵视佬和7dsa1wd1s佬提供的arr")]
+    note: "设置里面改打法，过这么久了应该没电了。\n- 该脚本只对RyougiMio佬的画图更新前做指路补充，需要配合使用。\n- 谢谢灵视佬和7dsa1wd1s佬提供的arr")]
 public class M11S
 {
     #region 用户设置

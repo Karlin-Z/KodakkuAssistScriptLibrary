@@ -1,0 +1,17 @@
+{
+    "name": "kodakku-assist-script-library-scripts",
+    "private": true,
+    "version": "0.0.0",
+    "type": "module",
+    "scripts": {
+        "typecheck": "tsc --noEmit",
+        "test": "node tests/selftest.ts && node tests/approval.mock.ts",
+        "format": "prettier --write --ignore-path ../.prettierignore . && npm --prefix ../web run format",
+        "format:check": "prettier --check --ignore-path ../.prettierignore . && npm --prefix ../web run format:check"
+    },
+    "devDependencies": {
+        "@types/node": "^26.6.6",
+        "prettier": "^3.10.1",
+        "typescript": "^5.9.3"
+    }
+}

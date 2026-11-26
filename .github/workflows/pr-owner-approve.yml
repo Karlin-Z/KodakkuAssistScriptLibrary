@@ -1,0 +1,63 @@
+name: PR Owner Approve
+
+# 文件夹所有者在 PR 会话里回复 /approve（或 pr_review_rules.json 里配置的其它命令）时：
+#   1. 重新校验 PR 当前 head，不信任之前的审核结果；
+#   2. 确认评论者确实是被修改文件夹的所有者；
+#   3. 用评论时的 head SHA 做 squash 合并，防止评论后作者又推新代码。
+#
+# 与 pr-auto-review.yml 一样用默认分支的脚本，只通过 API 读取 PR 内容，
+# 绝不检出或执行 PR 里的代码。
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write # 合并 PR
+  pull-requests: write # 读取 PR / 发表评论
+  issues: write # 评论 / 标签
+  statuses: write # 读取审核状态；校验失败时把它改成 failure
+  actions: write # 合并后 dispatch Pages workflow
+
+# 同一个 PR 的批准命令串行处理，避免两个 /approve 并发合并
+concurrency:
+  group: pr-owner-approve-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  approve:
+    name: 所有者批准合并
+    # 只处理跨作者 PR 里的评论，避免普通讨论也启动 runner。
+    # 标签名需与 pr_review_rules.json 的 foreign_folder_labels[0] 保持一致。
+    if: ${{ github.event.issue.pull_request != null && github.event.comment.user.type != 'Bot' && contains(github.event.issue.labels.*.name, '跨作者修改') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: 检出默认分支（仅获取审核脚本，不检出 PR 代码）
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: 配置 Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: '26'
+
+      - name: 处理批准命令
+        id: approve
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_AUTHOR: ${{ github.event.comment.user.login }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          COMMENT_TYPE: ${{ github.event.comment.user.type }}
+        run: node .github/scripts/pr_review.ts --approve-comment
+
+      - name: 触发 Pages 重新生成索引
+        if: ${{ success() && steps.approve.outputs.merged == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: gh workflow run pages.yml --repo "$REPO" --ref "$DEFAULT_BRANCH"

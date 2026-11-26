@@ -1,0 +1,11 @@
+# 依赖与构建产物
+node_modules/
+dist/
+_site/
+
+# npm 自动生成
+package-lock.json
+
+# 自动生成的索引
+index/
+web/public/index.json

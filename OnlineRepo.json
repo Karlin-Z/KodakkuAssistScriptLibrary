@@ -1,5 +1,89 @@
 [
   {
+    "Name": "AAC Cruiserweight M4 (Savage)",
+    "Guid": "aeb4391c-e8a6-4daa-ab71-18e44c94fab8",
+    "Version": "0.0.0.35",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/Arcadion/Savage/AAC%20Cruiserweight%20M4%20%28Savage%29.cs",
+    "Note": "This is the English version of the script for AAC Cruiserweight M4 (Savage), which is also known as M8S in short.\n\nThe script has been completed, at least for all the popular strats among EU Party Finder.\nIf you encounter any issue, please report to @_publius_cornelius_scipio_ in Kodakku Assist Discord.\n\nLink to RaidPlan 84d for Phase 1: https://raidplan.io/plan/B5Q3Mk62YKuTy84d\nLink to Toxic Friends RaidPlan DOG for Phase 2: https://raidplan.io/plan/9M-1G-mmOaaroDOG\n\nThe \"Half Rinon\" strat during Terrestrial Rage is the one combines the first half of Rinon with the second half of the clock strat.\nYou could check Hector's M8S video guide for more details.\n\nThe guidance of the \"Northwest and South\" strat during Ultraviolent Ray 4 is based on real-time positions of players.\nPlease make sure to get to the correct platform and form conga as quickly as possible.",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1263
+    ]
+  },
+  {
+    "Name": "阿卡狄亚零式登天斗技场 中量级4",
+    "Guid": "d9de6d9a-f6f5-41c6-a15b-9332fa1e6c33",
+    "Version": "0.0.1.20",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/Arcadion/Savage/%E9%98%BF%E5%8D%A1%E7%8B%84%E4%BA%9A%E9%9B%B6%E5%BC%8F%E7%99%BB%E5%A4%A9%E6%96%97%E6%8A%80%E5%9C%BA%20%E4%B8%AD%E9%87%8F%E7%BA%A74.cs",
+    "Note": "阿卡狄亚零式登天斗技场中量级4(也就是M8S)的脚本。\n\n此脚本基于其国际服版本创建。画图部分已经全部完成,指路部分也已经完全适配国服攻略,也就是MMW攻略组&苏帕酱噗的视频攻略。\n如果指路不适配你采用的攻略,可以在方法设置中将指路关闭。所有指路方法名称中均标注有\"指路\"一词。\n\n由于MMW图文攻略站和MMW视频攻略在本体的参照物基准上存在差异,因此在用户设置中提供了仅影响本体的不同参照物基准。\n基准的选择会影响指路和基准中轴线及其附属箭头。如果选择任意一种场地基准,基准中轴线将固定在场地的南北轴上并指向南侧,反之则会始终指向Boss面前。\n\nMMW攻略组&苏帕酱噗的门神视频攻略: https://www.bilibili.com/video/BV1aT3tzrEnq\nMMW攻略组&苏帕酱噗的本体视频攻略: https://www.bilibili.com/video/BV1gj3uzXEuB\nMMW图文攻略站门神: https://xivstrat.com/07/m8s1/\nMMW图文攻略站本体: https://xivstrat.com/07/m8s2/\n视频攻略的本体部分采用场地基准,仅第四次魔光采用Boss面向基准。图文攻略站全程采用Boss面向基准。\n\n如果在使用过程中遇到了电椅或异常,请先检查可达鸭本体与脚本是否更新到了最新版本,小队职能是否正确设置,错误是否可以稳定复现。\n如果上述三项都没有问题,请带着A Realm Recorded插件的录像在可达鸭Discord内联系@_publius_cornelius_scipio_反馈错误。\n\n此脚本的国际服版本适配了欧服野队攻略,也就是门神Raidplan 84d,本体Raidplan DOG。\n如果你想采用欧服野队攻略,可以下载此脚本的国际服版本也就是英文版本。",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1263
+    ]
+  },
+  {
+    "Name": "阿卡狄亚零式登天斗技场 重量级4",
+    "Guid": "d1d8375c-75e4-49a8-8764-aab85a982f0a",
+    "Version": "0.0.2.10",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/Arcadion/Savage/%E9%98%BF%E5%8D%A1%E7%8B%84%E4%BA%9A%E9%9B%B6%E5%BC%8F%E7%99%BB%E5%A4%A9%E6%96%97%E6%8A%80%E5%9C%BA%20%E9%87%8D%E9%87%8F%E7%BA%A74.cs",
+    "Note": "阿卡狄亚零式登天斗技场重量级4(也就是M12S)的脚本。\n\n脚本已经完工,后续将仅有修复bug的更新(如有)而不会有大的改动。\n\n此脚本适配的攻略是M12S整合文档攻略,本体境中奇梦(四运)适配的攻略是文档中提及的盗火改。\nM12S整合文档攻略 - 门神: https://docs.qq.com/doc/DUHZiZU54ZGx5eGZV\nM12S整合文档攻略 - 本体: https://docs.qq.com/doc/DUEVnSkFnU0hqdHRt\n如果脚本中的指路不适配你采用的攻略,可以在方法设置中将指路关闭。所有指路方法名称中均标注有\"指路\"一词。\n\n如果在使用过程中遇到了电椅或异常,请先检查可达鸭本体与脚本是否更新到了最新版本,小队职能是否正确设置,错误是否可以稳定复现。\n如果上述三项都没有问题,请带着A Realm Recorded插件的录像在可达鸭Discord内联系@_publius_cornelius_scipio_反馈错误。",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1327
+    ]
+  },
+  {
+    "Name": "妖星乱舞绝境战",
+    "Guid": "f9948da9-ce35-44d1-b410-02375c941458",
+    "Version": "0.0.5.3",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/DancingMadUltimate/%E5%A6%96%E6%98%9F%E4%B9%B1%E8%88%9E%E7%BB%9D%E5%A2%83%E6%88%98.cs",
+    "Note": "妖星乱舞绝境战的脚本。脚本应该算是...完工了?\n和灵视以往的作品不同,这次可能不会为妖星乱舞绝境战制作一个包含全程绘制与指路的全能型脚本。此脚本仅提供P1到P4的绘制,P2遗弃末世全程和P3深层痛楚(一运)究极冲击波的指路。\n完整的妖星乱舞绝境战可达鸭体验将由数个不同作者的作品组成,包括但不限于如下作者(按副本阶段排序):\n    Coda - P1的指路。\n    Usami - P3的指路。\n    RyougiMio - P4的指路,以及支持更多攻略并提供小队指挥和自动移动功能的P2指路。\n    Errer - P5的绘制与指路。\n此脚本将是灵视最后一个作品,灵视即将收手退休。也许灵视会在未来回归,但短期内将不再制作新的脚本。感谢陪伴!\n\nP1技能特效屏蔽需要在用户设置中手动启用。目前提供两种不同的方法,以缓解当前可达鸭版本的绘制丢失问题:\n    传统方法 - 即改变透明施法者的可见性。该方法不会丢失绘制,但极其不建议与其他任何提供相似功能的科技同时运行。\n    引擎方法 - 即根据handle移除指定特效。该方法目前有丢失绘制的报告,正在着手修复与优化。该方法可以与其他提供相似功能的科技同时运行。\n\nP2遗弃末世的指路仅支持\"融合优化 2222预分组 闲人固定\"这一种攻略,对于奇数轮的站位支持原版站位与近战优化站位。\n\"融合优化 2222预分组 闲人固定\"原版: https://docs.qq.com/doc/DTFBPRkJ0bVFoeGVV\n\"融合优化 2222预分组 闲人固定\"近战优化:  https://nga.178.com/read.php?tid=46952827\n除此之外,闲人组的位置分配仅支持\"坦克治疗在左,DPS在右,面向Boss近战在上,远程在下\",末尾引导消灭之脚的位置仅支持正北。\n需要指出的是,对于第1轮A组的位置分配,咏唱危机·驱动(分摊)跟随机制开始时的同组成员。\n对于第4轮B组的位置分配,根据机制开始时的分组,咏唱危机·散碎(分散)与咏唱危机·波动(扇形)一定各有一名近战与远程,因此按照面向Boss近战在上,远程在下分配。\n所有P2遗弃末世指路的坐标和ACT触发器\"宝宝椅\"保持完全统一。\n最后,需要注意的是,由于遗弃末世这一机制的复杂性,任何队员在此机制的任何时间节点处理机制错误都将导致指路不生效或者异常。\n如果指路不适配你采用的攻略,可以在方法设置中将相关的指路关闭。所有指路方法均标注有\"(指路)\"后缀。\n\n支持进行小队排序测试,可以在聊天框中输入/e kdmutest来检查小队排序是否正确。\n输入/e kdmuclear清除小队排序测试产生的目标标记。\n\n如果在使用过程中遇到了异常,请先检查可达鸭本体与脚本是否都更新到了最新版本,小队职能是否已正确设置,异常是否可以稳定复现。\n如果上述三点都没有问题,请带着A Realm Recorded插件的录像文件在可达鸭Discord内联系@_publius_cornelius_scipio_反馈异常。\n\n特别致谢(按副本阶段排序):\n    Karlin - 提供了两种技能特效屏蔽的实现,还紧急加班做好了绘制淡出与屏蔽技能特效的代码轮子,not all heroes wear capes.\n    RyougiMio - 提供了大量P2遗弃末世的绘制数据。\n    阿洛 - 提供了P2遗弃末世全部的指路坐标,以及大量见解。\n    南云铁虎 - 提供了大量P2与P3的绘制数据。\n    莫灵喵 - 提供了大量P4的绘制数据。\n    以及每一位录像提供者,出于隐私保护的目的没有列出常用名。\n\n\n\n社会的确是一种契约。...因为它并不是一种仅服务于短暂易逝的粗浅动物性存在的合伙契约。\n它是关于一切科学的合伙契约,是关于一切艺术的合伙契约,是关于每一种美德,关于一切完善(过程)的合伙契约。\n由于这样一种合伙契约的目标无法在数代人之内实现,它(便)不仅仅是生者之间的合伙契约,而是生者,逝者以及尚未出生者之间的合伙契约。\n......\n偏见在紧急情况下可以立即发挥作用;它将人的思想预先引导到一条稳定的智慧与美德之路上,使人在做决定时不再犹豫不决,怀疑一切,迷惘困惑,迟迟不付诸行动。\n偏见使人的德性成为他的习惯,而不是一连串孤立的行为。通过正当的偏见,人的义务便成为其本性的一部分。\n\n——埃德蒙·伯克,《法国革命论》,1790年",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1363
+    ]
+  },
+  {
+    "Name": "Karlin's FRU script (Customized by Cicero) Karlin的绝伊甸脚本 (灵视改装版)",
+    "Guid": "148718fd-575d-493a-8ac7-1cc7092aff85",
+    "Version": "0.0.1.19",
+    "Author": "Karlin",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/FuturesRewrittenUltimate/Karlin%27s%20FRU%20script%20%28Customized%20by%20Cicero%29%20Karlin%E7%9A%84%E7%BB%9D%E4%BC%8A%E7%94%B8%E8%84%9A%E6%9C%AC%20%28%E7%81%B5%E8%A7%86%E6%94%B9%E8%A3%85%E7%89%88%29.cs",
+    "Note": "***** Please read the note here carefully before running the script! *****\n***** 请在使用此脚本前仔细阅读此处的说明! *****\n\nThere is a character limit in the description area of scripts that I'm unable to put the whole description here. Therefore, I moved the script description to the pinned messages on Discord.\nNavigate to the Discord of Kodakku Assist, find the post \"Cicero's Kodakku Assist 个人在线脚本库\" in the channel \"示例与分享\", and finally check \"Pinned Messages\" for the script description.\nFor PC, \"Pinned Messages\" is in the upper right corner of the chat bar. For mobile, click the arrow icon in the upper right corner, then there would be a tab \"Pins\".\nIt would take about 5 minutes to go through the English part of the description. Please make sure you have read it in full before running the script. Thank you!\n\n脚本描述区域有字数限制,没法放下整个描述,所以我把描述部分移到了Discord上的标注消息中。\n去可达鸭的Discord,在\"示例与分享\"频道中找到帖子\"Cicero's Kodakku Assist 个人在线脚本库\",选择\"已标注消息\",就可以查看脚本描述了。\n对于电脑端,\"已标注消息\"在聊天栏的右上角。对于手机端,点击右上角的箭头标志,然后可以找到一个名为\"标注\"的标签页。\n阅读完中文部分大约需要花费5分钟的时间。请先完整地阅读脚本描述再使用本脚本，谢谢！\n\n\n\n西庇阿·埃米利乌斯(小西庇阿)久久地凝视着脚下广阔的迦太基城。在700年的漫长岁月里,迦太基拥有广阔的土地,众多的岛屿,以及属于其支配的海洋。\n迦太基所拥有的数量庞大的武器装备,战船,象群以及雄厚的财富,与之前人类历史上任何一个强大的帝国相比都毫不逊色。\n然而,在今天,城市陷落了,并遭受了彻底的破坏,迦太基城从地面上消失了。想到对手的这种命运,西庇阿·埃米利乌斯不禁潸然泪下。他心潮起伏,此刻的思考已经超乎一个军事胜利者的惯常思维。\n他想到的是,不仅限于人类,城市也好,国家也好,包括强盛的帝国,都逃避不了灭亡的命运。特洛伊帝国,亚述帝国,波斯帝国,还有20年前的马其顿王国,无不遵循了历史展示给人们的\"胜者必衰\"的铁律。\n不知是有意还是无意,这位得胜之师的最高长官吟诵起《荷马史诗》中特洛伊主将赫克托耳的一句名言:\n\"归根结底,特洛伊大概也会随着国王普里阿摩斯和追随他的战士共同死亡吧!\"\n站在他背后的历史学家波里比阿询问他何出此言,西庇阿·埃米利乌斯回过头来,注视着波里比阿这个20年来的亲密朋友,拉着他的手回答:\n\"波里比阿,我们刚刚消灭了一个曾经盛极一时的帝国,赢来了这一'伟大的瞬间'。但是现在充满我胸怀的,却不是胜利的喜悦,我反而有些伤感——我担心我们的罗马也会在某一时刻遭遇与此相同的命运!\"\n——第三次布匿战争末期,迦太基城沦陷时,146BC",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1238
+    ]
+  },
+  {
+    "Name": "Abyssos The Seventh Circle 万魔殿 炼净之狱3",
+    "Guid": "073ca5d8-9a34-41ff-8757-c3862c465be0",
+    "Version": "0.0.0.13",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/Pandemonium/Normal/Abyssos%20The%20Seventh%20Circle%20%E4%B8%87%E9%AD%94%E6%AE%BF%20%E7%82%BC%E5%87%80%E4%B9%8B%E7%8B%B13.cs",
+    "Note": "A simple script for the duty Abyssos The Seventh Circle.\n万魔殿 炼净之狱3的脚本。",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      1085
+    ]
+  },
+  {
+    "Name": "究极神兵绝境战",
+    "Guid": "ba05255f-37df-413f-8ddb-f0a61a9bacbe",
+    "Version": "0.0.4.3",
+    "Author": "Cicero 灵视",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/AdmiralLvtzov/WeaponsRefrainUltimate/%E7%A9%B6%E6%9E%81%E7%A5%9E%E5%85%B5%E7%BB%9D%E5%A2%83%E6%88%98.cs",
+    "Note": "究极神兵绝境战的脚本。\n由于先前的究极神兵绝境战脚本(作者@baelixac)已经停止维护很久了,在最新版本的可达鸭上会出现编译错误,因此我决定从零完全重写这个副本的脚本。\n\n脚本已经完工,后续将仅有修复bug的更新(如有)而不会有大的改动。\n\n适配的攻略是国服野队一套。\n如果指路不适配你采用的攻略,可以在方法设置中将相关的指路关闭。所有指路方法均标注有\"(指路)\"后缀。\n\n支持进行小队排序测试,可以在聊天框中输入/e kuwutest来检查小队排序是否正确。\n输入/e kuwuclear清除小队排序测试产生的目标标记。\n\n如果在使用过程中遇到了异常,请先检查可达鸭本体与脚本是否都更新到了最新版本,小队职能是否已正确设置,异常是否可以稳定复现。\n如果上述三点都没有问题,请带着A Realm Recorded插件的录像文件在可达鸭Discord内联系@_publius_cornelius_scipio_反馈异常。\n\n\n\n授予与接受专断权力的人都是罪人。无论(专断权力)出现在世界上何处,每个人都有义务竭尽全力抵抗它。\n只要能够以合乎理性的方式摆脱它,那么忍受它便是一种犯罪。\n......\n法律与专断权力永远势不两立。你只要向我指出一位执政者,我便会指出财产权(的存在);你只要向我指出权力,我便会指出保护(的义务)。\n说任何人能够拥有专断权力,在概念上是矛盾,在宗教上是亵渎,在政治上是邪恶。任何官职的授予都已经包含了相应的职责。\n否则,执政者存在的意义又是什么?设想权力可以仅仅为了权力自身而存在,在观念上就是荒谬的。法官受永恒的正义法则指引和约束,而我们所有人也都服从(这些法则)。\n......\n诸位之中有着基督教的代表,(这一宗教)宣称他们的上帝是爱,他们制度的根本精神就是明爱。这种宗教如此地憎恶压迫,以至于我们所敬拜的上帝以人的形象显现时,祂并未以伟大和威严的形象出现,而是与最卑微的人感同身受,从而确立了一条坚定且支配性的原则:\n人的福祉乃是一切政府的目的,因为那位自然的主宰选择以卑下者的身份显现。正是这些因素影响着他们,激励着他们,并将继续激励他们反对一切压迫——\n因为他们知道,那位在他们之中居首,也在我们所有人之中居首者,无论对于受牧养的羊群,还是对于牧养羊群的人,都曾使自己成为\"众人的仆人\"。\n......\n(因此,)我以印度人民的名义弹劾他!他颠覆了他们的法律、权利与自由,摧毁了他们的财产,使他们的国家满目疮痍。\n我以他所践踏的那些永恒的正义法则之名,并依据这些法则所赋予的权威,弹劾他!\n我以人性本身的名义弹劾他!他残酷地凌辱、伤害与压迫(人性),无论男女老幼、阶级地位与境遇。\n\n——埃德蒙·伯克,于沃伦·黑斯廷斯弹劾案的开庭陈述,1788年2月18日",
+    "UpdateTime": "2026-11-18T03:27:50Z",
+    "TerritoryIds": [
+      777
+    ]
+  },
+  {
     "Name": "格莱杨拉波尔歼殛战 指路+TTS",
     "Guid": "3f8c6b2e-91c4-4a87-bd63-0b7a5f0d7e42",
     "Version": "0.0.0.9",
@@ -22,6 +106,19 @@
     "UpdateTime": "2026-10-08T04:41:37Z",
     "TerritoryIds": [
       1362
+    ]
+  },
+  {
+    "Name": "糖豆人简易画图",
+    "Guid": "c706caf6-827b-4880-b212-fb4e6931aab3",
+    "Version": "0.0.0.2",
+    "Author": "Codaaaaaa",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/Fallguys.cs",
+    "Note": "v0.0.0.2\n糖豆人简易画图，画着玩。",
+    "UpdateInfo": "0.0.0.2\n初版",
+    "UpdateTime": "2026-10-29T23:20:38Z",
+    "TerritoryIds": [
+      1165
     ]
   },
   {
@@ -75,11 +172,11 @@
   {
     "Name": "多变迷宫 异闻商客奇谭 指路+画图",
     "Guid": "a2c7f9d1-4b6e-4f3a-9c18-7d2e6a5b8c41",
-    "Version": "0.0.0.4",
+    "Version": "0.0.0.5",
     "Author": "Codaaaaaa",
     "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Codaaaaaa/MerchantsTale.cs",
     "Note": "目前只完成了剑术大师，老一老三可以用Ryou佬的画图\n感谢Tou_uTou佬和Angelways佬的arr\n攻略使用的是mmw: https://mmw-ffxiv.feishu.cn/wiki/KvdJwQqfziIab3kPBAAcbCYvn5r",
-    "UpdateTime": "2026-10-08T04:41:37Z",
+    "UpdateTime": "2026-10-29T23:20:38Z",
     "TerritoryIds": [
       1317
     ]
@@ -434,17 +531,6 @@
     ]
   },
   {
-    "Name": "绝龙诗绘图",
-    "Guid": "d9c97e91-9b59-432d-a3a1-42a8475b7e2a",
-    "Version": "0.0.0.6",
-    "Author": "Karlin",
-    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.cs",
-    "UpdateTime": "2026-09-12T05:46:17Z",
-    "TerritoryIds": [
-      968
-    ]
-  },
-  {
     "Name": "极佐拉加绘图",
     "Guid": "d9c97e91-9b59-432d-a3a1-42a8586985b7e2a",
     "Version": "0.0.0.2",
@@ -499,6 +585,86 @@
     "UpdateTime": "2026-09-12T05:46:17Z",
     "TerritoryIds": [
       144
+    ]
+  },
+  {
+    "Name": "绝龙诗绘图",
+    "Guid": "d9c97e91-9b59-432d-a3a1-42a8475b7e2a",
+    "Version": "0.0.0.6",
+    "Author": "Karlin",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.cs",
+    "Parts": [
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P1.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P2.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P3.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P4.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P5.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P6.cs",
+      "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/Karlin-Z/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98/%E5%B9%BB%E6%83%B3%E9%BE%99%E8%AF%97%E7%BB%9D%E5%A2%83%E6%88%98.P7.cs"
+    ],
+    "UpdateTime": "2026-11-20T10:42:34Z",
+    "TerritoryIds": [
+      968
+    ]
+  },
+  {
+    "Name": "力之塔",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4805",
+    "Version": "0.0.41",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94.cs",
+    "Note": "本脚本负责战斗绘图、指路、TTS及宝箱连线。\r\n点名播报、统计、聊天查询和药师标记请另行安装独立脚本「力之塔（警察）」。\r\n藏宝图：1.5道中给箱子连线\r\n\r\n请选择自己小队的分组，指路可选ABC123/152463/柠檬松饼攻略\r\n老一:\r\nAOE绘制：旋转，压溃\r\n指路：陨石点名，第一次踩塔，第二次踩塔\r\n老二：\r\nAOE绘制：死刑，扇形，冰火爆炸\r\n指路：雪球，火球（按职能指路）\r\n老三：\r\nAOE绘制：龙态行动，冰圈，俯冲\r\n指路：龙态行动预站位，踩塔，小怪\r\n尾王：\r\nAOE绘制：致命斧/枪，暗杀短剑\r\n指路：符文之斧，圣枪",
+    "UpdateInfo": "分离警察功能；修复柠檬松饼凝冰冲击分组；使用可取消异步延时并增加生命周期校验；统一绘图命名、清理范围与TTS接口。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "力之塔排雷（塔内）",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4999",
+    "Version": "0.1.1",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94%E6%8E%92%E9%9B%B7%EF%BC%88%E5%A1%94%E5%86%85%EF%BC%89.cs",
+    "Note": "塔内在聊天栏输入[/e 新月排雷]即可开始排雷。再次输入可关闭显示。显示持续1800s，如果显示消失，则请重新输入。\n 重大更新：\n- 新增地图切换时自动显示/隐藏地雷标记的功能。\n- 数据按地图ID重构，确保只显示当前地图的地雷。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "力之塔（警察）",
+    "Guid": "9F8E7D6C-5B4A-3C2D-1E0F-9A8B7C6D5E4F",
+    "Version": "0.0.3",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%8A%9B%E4%B9%8B%E5%A1%94%EF%BC%88%E8%AD%A6%E5%AF%9F%EF%BC%89.cs",
+    "Note": "力之塔副本的小警察功能，提供关键机制点名播报和检查功能。同时可主动检查扔钱/复活/食物/蓝药等。\r\n\r\n------------以下为默语频道的主动查询功能示意，可配置响应来自小队的检查指令并在小队频道输出------------\r\n检查蓝药：输入【/e 蓝药检查】会输出药师蓝药使用情况，输入【/e 蓝药清理】会清理所有数据\r\n检查复活：输入【/e 复活检查 <数字>...】，数字仅限0~3，支持空格分隔、去重排序，比如【/e 复活检查 1 2】。不指定次数则输出复活次数在0~3次的所有玩家\r\n检查食物：输入【/e 食物检查】会输出所有塔内未进食/食物剩余时间小于等于指定阈值的玩家，负数阈值按0分钟处理\r\n检查扔钱：输入【/e 扔钱检查】会输出所有使用扔钱的玩家和扔钱次数，输入【/e 扔钱清理】会清空扔钱统计数据\r\n标记药师：输入【/e 标记药师】会先清空公共头顶标记，再以攻击1~8标记至多8名药师；标记对其他玩家可见",
+    "UpdateInfo": "检查输出改用可取消异步快照排程，重置、卸载或新同类命令使旧回调失效；校验复活参数及食物阈值；修正陨石和斧猎物状态ID、雪球连线ID，恢复南北分摊图标事件；修正尾王三平台坐标和状态去重生命周期，圣枪排序保留至41557轮次重置；公共药师标记上限8人。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
+    ]
+  },
+  {
+    "Name": "复活位置",
+    "Guid": "874D3ECF-BD6B-448F-BB42-AE7F082E4809",
+    "Version": "0.0.2",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E5%A4%8D%E6%B4%BB%E4%BD%8D%E7%BD%AE.cs",
+    "Note": "查看自己将会复活在哪里",
+    "UpdateTime": "2026-11-21T12:40:44Z"
+  },
+  {
+    "Name": "新月岛CE",
+    "Guid": "15725518-8F8E-413A-BEA8-E19CC861CF93",
+    "Version": "0.2.2",
+    "Author": "XSZYYS",
+    "DownloadUrl": "https://raw.githubusercontent.com/Karlin-Z/KodakkuAssistScriptLibrary/main/ShoOtaku/%E6%96%B0%E6%9C%88%E5%B2%9BCE.cs",
+    "Note": "新月岛CE绘制已完成",
+    "UpdateInfo": "统一绘图命名与清理范围；修复火冰陷阱、风石光、加鲁拉冲锋及怒潮断头台的并发状态和冲锋失败恢复；陷阱使用可取消的异步延迟重绘并在卸载时释放；加强事件数值解析。",
+    "UpdateTime": "2026-11-21T12:40:44Z",
+    "TerritoryIds": [
+      1252
     ]
   },
   {

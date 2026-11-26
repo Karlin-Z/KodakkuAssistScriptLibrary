@@ -1,0 +1,57 @@
+<Project>
+  <Import Project="$(MSBuildThisFileDirectory)local.props" Condition="Exists('$(MSBuildThisFileDirectory)local.props')" />
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <EnablePreviewFeatures>true</EnablePreviewFeatures>
+    <GenerateRequiresPreviewFeaturesAttribute>true</GenerateRequiresPreviewFeaturesAttribute>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>disable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <OutputType>Library</OutputType>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <NoWarn>CS0169;CS0414;CS0649;CS8618;CS0108;CS0114;CS0168;CS0219;CS0067;CA1416;CA2252;MSB3246</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND Exists('$(APPDATA)\XIVLauncherCN\addon\Hooks\dev\Dalamud.dll')">$(APPDATA)\XIVLauncherCN\addon\Hooks\dev\</DalamudLibPath>
+    <DalamudLibPath Condition="'$(DalamudLibPath)' == '' AND Exists('$(APPDATA)\XIVLauncher\addon\Hooks\dev\Dalamud.dll')">$(APPDATA)\XIVLauncher\addon\Hooks\dev\</DalamudLibPath>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <KaPluginDirNorm Condition="'$(KaPluginDir)' != ''">$([MSBuild]::EnsureTrailingSlash('$(KaPluginDir)'))</KaPluginDirNorm>
+    <KaPluginDlls Condition="'$(KaPluginDlls)' == '' AND '$(KaPluginDir)' != '' AND Exists('$(KaPluginDirNorm)KodakkuAssist.dll')">$(KaPluginDirNorm)*.dll</KaPluginDlls>
+    <KaPluginDlls Condition="'$(KaPluginDlls)' == '' AND Exists('$(APPDATA)\XIVLauncherCN\installedPlugins\KodakkuAssist')">$(APPDATA)\XIVLauncherCN\installedPlugins\KodakkuAssist\*\*.dll</KaPluginDlls>
+    <KaPluginDlls Condition="'$(KaPluginDlls)' == '' AND Exists('$(APPDATA)\XIVLauncher\installedPlugins\KodakkuAssist')">$(APPDATA)\XIVLauncher\installedPlugins\KodakkuAssist\*\*.dll</KaPluginDlls>
+    <KaPluginDlls Condition="'$(KaPluginDlls)' == '' AND Exists('$(MSBuildThisFileDirectory)..\KodakkuAssist\KodakkuAssist\bin\Debug\net10.0-windows\KodakkuAssist.dll')">$(MSBuildThisFileDirectory)..\KodakkuAssist\KodakkuAssist\bin\Debug\net10.0-windows\*.dll</KaPluginDlls>
+    <KaPluginDlls Condition="'$(KaPluginDlls)' == '' AND Exists('$(MSBuildThisFileDirectory)refs\KodakkuAssist.dll')">$(MSBuildThisFileDirectory)refs\*.dll</KaPluginDlls>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <KaInstalledPluginDll Include="$(APPDATA)\XIVLauncherCN\installedPlugins\KodakkuAssist\*\KodakkuAssist.dll" />
+    <KaInstalledPluginDll Include="$(APPDATA)\XIVLauncher\installedPlugins\KodakkuAssist\*\KodakkuAssist.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="System.Collections.Generic" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(DalamudLibPath)' != ''">
+    <Reference Include="$(DalamudLibPath)*.dll" Private="false" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(KaPluginDlls)' != ''">
+    <Reference Include="$(KaPluginDlls)" Private="false" />
+  </ItemGroup>
+
+  <Target Name="KaCheckPluginReferences" BeforeTargets="CoreCompile">
+    <PropertyGroup>
+      <_KaUsesInstalled>$(KaPluginDlls.Contains('installedPlugins'))</_KaUsesInstalled>
+    </PropertyGroup>
+    <Warning Condition="'$(KaPluginDir)' != '' AND !Exists('$(KaPluginDirNorm)KodakkuAssist.dll')" Text="KaPluginDir 下未找到 KodakkuAssist.dll：$(KaPluginDir)，已回退到自动探测。" />
+    <Warning Condition="'$(KaPluginDir)' == '' AND '@(KaInstalledPluginDll->Count())' &gt; '1'" Text="检测到多个 KodakkuAssist 版本目录，可能出现重复引用：@(KaInstalledPluginDll)" />
+    <Error Condition="'$(_KaUsesInstalled)' == 'True' AND '@(KaInstalledPluginDll->Count())' == '0'" Text="installedPlugins 下没有找到 KodakkuAssist.dll：请重装可达鸭插件，或在 local.props 设置 KaPluginDir。" />
+    <Error Condition="'$(KaPluginDlls)' == ''" Text="未找到 KodakkuAssist.dll：请安装可达鸭插件，或在 local.props 设置 KaPluginDir。" />
+  </Target>
+</Project>

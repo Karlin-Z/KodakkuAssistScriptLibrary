@@ -25,43 +25,44 @@ export const activeSection = ref<SectionId | null>(null)
  * 之前这里写死成头部高度，比 scroll-margin-top 小，高亮就会整体差一节。
  */
 export function useActiveSection(): void {
-  const margins: Partial<Record<SectionId, number>> = {}
+    const margins: Partial<Record<SectionId, number>> = {}
 
-  /** 留一点容差，免得亚像素布局下「刚好落地」的那一节被判在门外。 */
-  const TOLERANCE = 4
+    /** 留一点容差，免得亚像素布局下「刚好落地」的那一节被判在门外。 */
+    const TOLERANCE = 4
 
-  function update(): void {
-    let current: SectionId | null = null
-    for (const item of NAV) {
-      const el = document.getElementById(item.id)
-      if (!el) continue
-      if (el.getBoundingClientRect().top <= (margins[item.id] ?? 0) + TOLERANCE) current = item.id
+    function update(): void {
+        let current: SectionId | null = null
+        for (const item of NAV) {
+            const el = document.getElementById(item.id)
+            if (!el) continue
+            if (el.getBoundingClientRect().top <= (margins[item.id] ?? 0) + TOLERANCE)
+                current = item.id
+        }
+        activeSection.value = current
     }
-    activeSection.value = current
-  }
 
-  function measure(): void {
-    for (const item of NAV) {
-      const el = document.getElementById(item.id)
-      // scroll-margin-top 只在断点变化时可能不同，量一次缓存起来，滚动回调里就不用反复取计算样式
-      margins[item.id] = el ? Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0 : 0
+    function measure(): void {
+        for (const item of NAV) {
+            const el = document.getElementById(item.id)
+            // scroll-margin-top 只在断点变化时可能不同，量一次缓存起来，滚动回调里就不用反复取计算样式
+            margins[item.id] = el ? Number.parseFloat(getComputedStyle(el).scrollMarginTop) || 0 : 0
+        }
     }
-  }
 
-  function onResize(): void {
-    measure()
-    update()
-  }
+    function onResize(): void {
+        measure()
+        update()
+    }
 
-  onMounted(() => {
-    measure()
-    update()
-    window.addEventListener('scroll', update, { passive: true })
-    window.addEventListener('resize', onResize)
-  })
+    onMounted(() => {
+        measure()
+        update()
+        window.addEventListener('scroll', update, { passive: true })
+        window.addEventListener('resize', onResize)
+    })
 
-  onUnmounted(() => {
-    window.removeEventListener('scroll', update)
-    window.removeEventListener('resize', onResize)
-  })
+    onUnmounted(() => {
+        window.removeEventListener('scroll', update)
+        window.removeEventListener('resize', onResize)
+    })
 }

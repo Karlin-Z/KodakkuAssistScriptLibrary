@@ -12,6 +12,8 @@ on:
 permissions:
   contents: write # 合并 PR
   pull-requests: write # 留言 / 合并
+  issues: write # 给跨作者 PR 添加标签
+  statuses: write # 在当前 head 上记录跨作者审核状态，供 /approve 校验
   actions: write # 合并后 dispatch Pages workflow（GITHUB_TOKEN 不能靠 push 触发它）
 
 # 同一个 PR 只保留最新一次审核，避免连推多个提交时并发合并
@@ -32,11 +34,11 @@ jobs:
           ref: ${{ github.event.repository.default_branch }}
           persist-credentials: false
 
-      # 审核脚本是零依赖的 Node 模块，不需要 npm install
+      # 审核脚本运行时零依赖（tsc 类型检查在 Pages workflow 里统一执行）
       - name: 配置 Node
         uses: actions/setup-node@v7
         with:
-          node-version: '22'
+          node-version: '26'
 
       - name: 审核 PR
         id: review
@@ -48,11 +50,13 @@ jobs:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           # 用于读取已提交的 guid 映射表做查重（取基线分支当前状态）
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
-        run: node .github/scripts/pr_review.mjs
+        run: node .github/scripts/pr_review.ts
 
       - name: 自动合并（squash）
         id: merge
-        if: ${{ success() }}
+        # 只有审核脚本明确输出 auto_merge=true（自己的文件夹且校验通过）才合并；
+        # 跨作者 PR 会输出 false，PR 保持打开，等待人工审核。
+        if: ${{ success() && steps.review.outputs.auto_merge == 'true' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -65,8 +69,9 @@ jobs:
             --match-head-commit "$PR_HEAD_SHA"
 
       # GITHUB_TOKEN 触发的 push 不会再触发 push 事件，所以必须显式 dispatch Pages workflow
+      # 只有确实合并成功时才需要重建索引（跨作者 PR 会跳过合并，不应触发）
       - name: 触发 Pages 重新生成索引
-        if: ${{ success() }}
+        if: ${{ success() && steps.merge.outcome == 'success' }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
